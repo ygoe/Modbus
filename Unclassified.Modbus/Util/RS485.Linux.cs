@@ -241,7 +241,7 @@ internal class RS485 : IDisposable
 		{
 			try
 			{
-				var ptr = UnsafeNativeMethods.StrError(errno);
+				nint ptr = UnsafeNativeMethods.StrError(errno);
 				return Marshal.PtrToStringAnsi(ptr) ?? "";
 			}
 			catch

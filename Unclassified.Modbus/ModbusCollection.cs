@@ -11,7 +11,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 {
 	#region Private data
 
-	private readonly List<IModbusObject> objects = new();
+	private readonly List<IModbusObject> objects = [];
 
 	#endregion Private data
 
@@ -169,9 +169,9 @@ public class ModbusCollection : ICollection<IModbusObject>
 		while (length > 0)
 		{
 			ushort word1 = GetUInt16(address);
-			sb.Append(encoding.GetChars(new[] { (byte)(word1 >> 8) })[0]);
+			sb.Append(encoding.GetChars([(byte)(word1 >> 8)])[0]);
 			if (length > 1)
-				sb.Append(encoding.GetChars(new[] { (byte)(word1 & 0xff) })[0]);
+				sb.Append(encoding.GetChars([(byte)(word1 & 0xff)])[0]);
 			length -= 2;
 			address++;
 		}
@@ -317,9 +317,9 @@ public class ModbusCollection : ICollection<IModbusObject>
 		for (int addressOffset = 0; addressOffset < (value.Length + 1) / 2; addressOffset++)
 		{
 			objects.RemoveAll(e => e.Address == address + addressOffset);
-			ushort word = (ushort)(encoding.GetBytes(new[] { value[addressOffset * 2] })[0] << 8);
+			ushort word = (ushort)(encoding.GetBytes([value[addressOffset * 2]])[0] << 8);
 			if (addressOffset * 2 + 1 < value.Length)
-				word |= encoding.GetBytes(new[] { value[addressOffset * 2] })[0];
+				word |= encoding.GetBytes([value[addressOffset * 2]])[0];
 			objects.Add(CreateValueObject(address + addressOffset, word));
 		}
 	}

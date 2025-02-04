@@ -9,7 +9,7 @@ internal class ByteBuffer
 
 	private const int DefaultCapacity = 1024;
 
-	private readonly object syncObj = new();
+	private readonly Lock syncObj = new();
 
 	/// <summary>
 	/// The internal buffer.
@@ -220,8 +220,7 @@ internal class ByteBuffer
 	/// <param name="bytes">The bytes to add to the buffer.</param>
 	public void Enqueue(byte[] bytes)
 	{
-		if (bytes == null)
-			throw new ArgumentNullException(nameof(bytes));
+		ArgumentNullException.ThrowIfNull(bytes);
 
 		Enqueue(bytes, 0, bytes.Length);
 	}
@@ -243,12 +242,9 @@ internal class ByteBuffer
 	/// <param name="count">The number of bytes to add.</param>
 	public void Enqueue(byte[] bytes, int offset, int count)
 	{
-		if (bytes == null)
-			throw new ArgumentNullException(nameof(bytes));
-		if (offset < 0)
-			throw new ArgumentOutOfRangeException(nameof(offset));
-		if (count < 0)
-			throw new ArgumentOutOfRangeException(nameof(offset));
+		ArgumentNullException.ThrowIfNull(bytes);
+		ArgumentOutOfRangeException.ThrowIfNegative(offset);
+		ArgumentOutOfRangeException.ThrowIfNegative(count);
 		if (offset + count > bytes.Length)
 			throw new ArgumentOutOfRangeException(nameof(count));
 

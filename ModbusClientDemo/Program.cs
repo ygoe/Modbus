@@ -1,6 +1,7 @@
 ﻿using System.Globalization;
 using System.IO.Ports;
 using System.Net.Sockets;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using ModbusClientDemo.Util;
@@ -10,8 +11,9 @@ namespace ModbusClientDemo;
 
 public class Program
 {
-	private static ConsoleLogger? logger;
+	private static CompactConsoleLogger? logger;
 	private static LogLevel minLogLevel = LogLevel.None;
+	private static bool enableMonitor;
 	private static IModbusConnectionFactory? connectionFactory;
 	private static int deviceId;
 	private static CancellationTokenSource? currentCommandCts;
@@ -34,8 +36,14 @@ public class Program
 			return 1;
 		}
 
-		logger = new(minLogLevel);
+		logger = new("", minLevel: minLogLevel);
 		var client = new ModbusClient(connectionFactory!, logger);
+
+		if (enableMonitor)
+		{
+			client.SendingRequest += OnClientSendingRequest;
+			client.ResponseReceived += OnClientResponseReceived;
+		}
 
 		// 80 columns:     ---------+---------+---------+---------+---------+---------+---------+---------+
 		Console.WriteLine("Simple Modbus client");
@@ -125,6 +133,100 @@ public class Program
 		return 0;
 	}
 
+	private static void OnClientSendingRequest(object? sender, ModbusClient.RequestEventArgs args)
+	{
+		var message = new StringBuilder();
+		var parameters = new List<object?>();
+		if (args.DeviceId != null)
+		{
+			message.Append(" {DeviceId}");
+			parameters.Add(args.DeviceId);
+		}
+		if (args.FunctionCode != null)
+		{
+			message.Append(" {FunctionCode}");
+			parameters.Add(args.FunctionCode);
+		}
+		if (args.StartAddress != null)
+		{
+			message.Append(" {StartAddress}");
+			parameters.Add(args.StartAddress);
+		}
+		if (args.Count != null)
+		{
+			message.Append(" {Count}");
+			parameters.Add(args.Count);
+		}
+		if (args.Data != null)
+		{
+			message.Append(" {Data}");
+			parameters.Add(args.Data);
+		}
+		if (args.DataArray != null)
+		{
+			message.Append(" {DataArray}");
+			parameters.Add(string.Join(',', args.DataArray));
+		}
+		if (args.Category != null)
+		{
+			message.Append(" {Category}");
+			parameters.Add(args.Category);
+		}
+		if (args.StartObjectId != null)
+		{
+			message.Append(" {StartObjectId}");
+			parameters.Add(args.StartObjectId);
+		}
+		logger?.LogInformation("Sending request:" + message, [.. parameters]);
+	}
+
+	private static void OnClientResponseReceived(object? sender, ModbusClient.ResponseEventArgs args)
+	{
+		var message = new StringBuilder();
+		var parameters = new List<object?>();
+		if (args.DeviceId != null)
+		{
+			message.Append(" {DeviceId}");
+			parameters.Add(args.DeviceId);
+		}
+		if (args.FunctionCode != null)
+		{
+			message.Append(" {FunctionCode}");
+			parameters.Add(args.FunctionCode);
+		}
+		if (args.ErrorCode != null)
+		{
+			message.Append(" {ErrorCode}");
+			parameters.Add(args.ErrorCode);
+		}
+		if (args.StartAddress != null)
+		{
+			message.Append(" {StartAddress}");
+			parameters.Add(args.StartAddress);
+		}
+		if (args.Count != null)
+		{
+			message.Append(" {Count}");
+			parameters.Add(args.Count);
+		}
+		if (args.Data != null)
+		{
+			message.Append(" {Data}");
+			parameters.Add(args.Data);
+		}
+		if (args.DataArray != null)
+		{
+			message.Append(" {DataArray}");
+			parameters.Add(string.Join(',', args.DataArray));
+		}
+		if (args.Objects != null)
+		{
+			message.Append(" {Objects}");
+			parameters.Add(string.Join(',', args.Objects.Select(kvp => $"{kvp.Key}={kvp.Value}")));
+		}
+		logger?.LogInformation("Received response:" + message, [.. parameters]);
+	}
+
 	/// <summary>
 	/// Parses the command line arguments into the class fields.
 	/// </summary>
@@ -144,6 +246,9 @@ public class Program
 	/// <item>
 	/// -log level<br/>
 	/// level: trace|debug|info|warn|error|critical|none (case-insensitive, can be abbreviated to first character), default is none
+	/// </item>
+	/// <item>
+	/// -monitor
 	/// </item>
 	/// </list>
 	/// </remarks>
@@ -241,6 +346,10 @@ public class Program
 					'n' => LogLevel.None,
 					_ => throw new ArgumentException("Invalid log argument: " + args[i])
 				}; ;
+			}
+			else if (args[i] == "-monitor")
+			{
+				enableMonitor = true;
 			}
 			else
 			{
