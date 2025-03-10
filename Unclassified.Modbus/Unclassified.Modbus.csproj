@@ -18,6 +18,7 @@
     <Copyright>Yves Goergen</Copyright>
     <PackageTags>modbus protocol</PackageTags>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/ygoe/Modbus</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
