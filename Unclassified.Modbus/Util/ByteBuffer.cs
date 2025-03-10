@@ -353,7 +353,7 @@ internal class ByteBuffer
 				}
 				myDequeueManualTcs = Reset(ref dequeueManualTcs);
 			}
-			await AwaitAsync(myDequeueManualTcs, cancellationToken);
+			await AwaitAsync(myDequeueManualTcs, cancellationToken).NoSync();
 		}
 	}
 
@@ -385,7 +385,7 @@ internal class ByteBuffer
 				}
 				myDequeueManualTcs = Reset(ref dequeueManualTcs);
 			}
-			await AwaitAsync(myDequeueManualTcs, cancellationToken);
+			await AwaitAsync(myDequeueManualTcs, cancellationToken).NoSync();
 		}
 	}
 
@@ -406,7 +406,7 @@ internal class ByteBuffer
 			}
 			myAvailableTcs = Reset(ref availableTcs);
 		}
-		await AwaitAsync(myAvailableTcs, cancellationToken);
+		await AwaitAsync(myAvailableTcs, cancellationToken).NoSync();
 	}
 
 	#endregion Public methods
@@ -504,9 +504,9 @@ internal class ByteBuffer
 	// Must NOT be called within the lock
 	private static async Task AwaitAsync(TaskCompletionSource<bool> tcs, CancellationToken cancellationToken)
 	{
-		if (await Task.WhenAny(tcs.Task, Task.Delay(-1, cancellationToken)) == tcs.Task)
+		if (await Task.WhenAny(tcs.Task, Task.Delay(-1, cancellationToken)).NoSync() == tcs.Task)
 		{
-			await tcs.Task;   // Already completed
+			await tcs.Task.NoSync();   // Already completed
 			return;
 		}
 		cancellationToken.ThrowIfCancellationRequested();

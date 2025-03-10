@@ -80,6 +80,33 @@ internal static class TaskHelper
 	}
 
 	/// <summary>
+	/// Configures an awaiter to not attempt to marshal the continuation back to the original
+	/// synchronization context captured. This is a shortcut to <c>ConfigureAwait(false)</c> which
+	/// should be used in all general-purpose library code by default.
+	/// </summary>
+	/// <param name="task">The task to configure the awaiter of.</param>
+	/// <returns>A configured Task awaitable.</returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static ConfiguredValueTaskAwaitable NoSync(this ValueTask task)
+	{
+		return task.ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Configures an awaiter to not attempt to marshal the continuation back to the original
+	/// synchronization context captured. This is a shortcut to <c>ConfigureAwait(false)</c> which
+	/// should be used in all general-purpose library code by default.
+	/// </summary>
+	/// <typeparam name="TResult">The type of the result produced by the <paramref name="task"/>.</typeparam>
+	/// <param name="task">The task to configure the awaiter of.</param>
+	/// <returns>A configured Task awaitable.</returns>
+	[MethodImpl(MethodImplOptions.AggressiveInlining)]
+	public static ConfiguredValueTaskAwaitable<TResult> NoSync<TResult>(this ValueTask<TResult> task)
+	{
+		return task.ConfigureAwait(false);
+	}
+
+	/// <summary>
 	/// Awaits a task and ignores a thrown <see cref="OperationCanceledException"/>. All other
 	/// exceptions are passed through.
 	/// </summary>
@@ -90,7 +117,7 @@ internal static class TaskHelper
 	{
 		try
 		{
-			await task;
+			await task.NoSync();
 		}
 		catch (OperationCanceledException) when (task.IsCanceled)
 		{
@@ -109,7 +136,7 @@ internal static class TaskHelper
 	{
 		try
 		{
-			return await task;
+			return await task.NoSync();
 		}
 		catch (OperationCanceledException) when (task.IsCanceled)
 		{
@@ -127,7 +154,7 @@ internal static class TaskHelper
 		var tcs = new TaskCompletionSource();
 		using (cancellationToken.Register(() => tcs.TrySetResult(), useSynchronizationContext: false))
 		{
-			await tcs.Task;
+			await tcs.Task.NoSync();
 		}
 	}
 }

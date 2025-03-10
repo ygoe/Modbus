@@ -1,0 +1,3 @@
+[*.cs]
+# Do not directly await a Task, use ConfigureAwait()
+dotnet_diagnostic.CA2007.severity = warning

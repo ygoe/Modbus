@@ -41,13 +41,13 @@ internal class ModbusTcpConnection : IModbusConnection
 		if (logger?.IsEnabled(LogLevel.Trace) == true)
 			logger?.LogTrace("Sending: {HexData}", bytes.Span.ToHexString());
 		var stream = tcpClient.GetStream();
-		await stream.WriteAsync(bytes, cancellationToken);
+		await stream.WriteAsync(bytes, cancellationToken).NoSync();
 
 		// Wait for a response
 		int bufferUsed = 0;
 		while (true)
 		{
-			int readBytes = await stream.ReadAsync(buffer.AsMemory(bufferUsed), cancellationToken);
+			int readBytes = await stream.ReadAsync(buffer.AsMemory(bufferUsed), cancellationToken).NoSync();
 			if (readBytes <= 0)
 			{
 				// We need to close the stream manually or more trouble is coming that way...

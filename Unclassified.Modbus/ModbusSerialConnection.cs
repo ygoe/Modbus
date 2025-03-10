@@ -46,20 +46,20 @@ internal class ModbusSerialConnection : IModbusConnection
 			throw new InvalidOperationException("Connection not opened.");
 
 		// Clear all data (ignore excess unread data from previous responses)
-		await serialPort.BaseStream.FlushAsync(cancellationToken);
+		await serialPort.BaseStream.FlushAsync(cancellationToken).NoSync();
 		serialPort.DiscardInBuffer();
 		serialPort.DiscardOutBuffer();
 
 		var bytes = MakeMessageFrame(requestBody.Span);
 		if (logger?.IsEnabled(LogLevel.Trace) == true)
 			logger?.LogTrace("Sending: {HexData}", bytes.Span.ToHexString());
-		await serialPort.WriteAsync(bytes, cancellationToken);
+		await serialPort.WriteAsync(bytes, cancellationToken).NoSync();
 
 		// Wait for a response
 		int bufferUsed = 0;
 		while (true)
 		{
-			int readBytes = await serialPort.ReadAsync(buffer.AsMemory(bufferUsed), cancellationToken);
+			int readBytes = await serialPort.ReadAsync(buffer.AsMemory(bufferUsed), cancellationToken).NoSync();
 			if (readBytes <= 0)
 				throw new IOException($"The serial port received {readBytes} bytes while waiting for a response, got {bufferUsed} bytes so far.");
 			bufferUsed += readBytes;

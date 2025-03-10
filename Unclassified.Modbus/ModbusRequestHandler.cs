@@ -1,4 +1,6 @@
-﻿namespace Unclassified.Modbus;
+﻿using Unclassified.Modbus.Util;
+
+namespace Unclassified.Modbus;
 
 /// <summary>
 /// Decodes and processes a Modbus request sent by a client and generates a response or other
@@ -31,7 +33,7 @@ public class ModbusRequestHandler
 			case FunctionCode.ReadDiscreteInputs:
 			case FunctionCode.ReadHoldingRegisters:
 			case FunctionCode.ReadInputRegisters:
-				return await HandleReadRequest(deviceId, functionCode, requestBody, responseBody);
+				return await HandleReadRequest(deviceId, functionCode, requestBody, responseBody).NoSync();
 			default:
 				return MakeExceptionResponse(deviceId, functionCode, ModbusError.IllegalFunction, responseBody);
 		}
@@ -52,7 +54,7 @@ public class ModbusRequestHandler
 		};
 		var objects = new ModbusCollection(objectType);
 
-		await ProvideReadData(deviceId, objects);
+		await ProvideReadData(deviceId, objects).NoSync();
 		if (objects.Count > ModbusRange.GetMaxLength(objectType))
 			throw new InvalidOperationException("Trying to respond with too many Modbus objects.");
 

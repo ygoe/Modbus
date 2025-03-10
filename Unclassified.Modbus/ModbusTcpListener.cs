@@ -90,7 +90,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		tcpListener!.Stop();
 		using (cancellationToken.Register(() => runListenerCts!.Cancel(), useSynchronizationContext: false))
 		{
-			await runTask;
+			await runTask.NoSync();
 		}
 	}
 
@@ -116,7 +116,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				{
 					// Cancel this with ObjectDisposedException; our CancellationToken is for
 					// closing all remaining client connections afterwards.
-					tcpClient = await tcpListener!.AcceptTcpClientAsync(CancellationToken.None);
+					tcpClient = await tcpListener!.AcceptTcpClientAsync(CancellationToken.None).NoSync();
 				}
 				catch (ObjectDisposedException)
 				{
@@ -128,7 +128,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				clients.TryAdd(tcpClient, true);
 				var clientTask = Task.Run(async () =>
 				{
-					await RunClientConnection(tcpClient);
+					await RunClientConnection(tcpClient).NoSync();
 					tcpClient.Dispose();
 					logger?.LogInformation("Client disconnected from {Endpoint}", endpoint);
 					clients.TryRemove(tcpClient, out _);
@@ -141,7 +141,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		{
 			// Wait for all client connections to close
 			logger?.LogInformation("Shutting down, waiting for client connections...");
-			await Task.WhenAny(Task.WhenAll(clientTasks), cancellationToken.WaitAsync());
+			await Task.WhenAny(Task.WhenAll(clientTasks), cancellationToken.WaitAsync()).NoSync();
 
 			// If cancellationToken has been signalled, disconnect the clients
 			if (cancellationToken.IsCancellationRequested)
@@ -152,7 +152,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					tcpClient.Dispose();
 				}
 			}
-			await Task.WhenAll(clientTasks);
+			await Task.WhenAll(clientTasks).NoSync();
 			logger?.LogInformation("All client connections closed");
 			clientTasks.Clear();
 			tcpListener = null;
@@ -184,7 +184,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 			int readLength;
 			try
 			{
-				readLength = await stream.ReadAsync(buffer);
+				readLength = await stream.ReadAsync(buffer).NoSync();
 				if (readLength == 0)
 					logger?.LogInformation("Connection closed remotely");
 			}
@@ -213,7 +213,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		}
 
 		stopReadCts.Cancel();
-		await readTask.IgnoreCanceled();
+		await readTask.IgnoreCanceled().NoSync();
 	}
 
 	/// <summary>
@@ -224,7 +224,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		byte[] buffer = new byte[260];
 		while (true)
 		{
-			await byteBuffer.DequeueAsync(buffer, 0, 6, cancellationToken);
+			await byteBuffer.DequeueAsync(buffer, 0, 6, cancellationToken).NoSync();
 			int transactionId = buffer[0] << 8 | buffer[1];
 			int length = buffer[4] << 8 | buffer[5];
 			if (length > 254)
@@ -233,8 +233,8 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				return;
 			}
 			// TODO: Timeout for the remaining data
-			await byteBuffer.DequeueAsync(buffer, 0, length, cancellationToken);
-			int responseLength = await requestHandler.HandleRequest(buffer.AsMemory()[..length], buffer.AsMemory(6));
+			await byteBuffer.DequeueAsync(buffer, 0, length, cancellationToken).NoSync();
+			int responseLength = await requestHandler.HandleRequest(buffer.AsMemory()[..length], buffer.AsMemory(6)).NoSync();
 			if (responseLength < 0)
 			{
 				// Close the connection
@@ -249,7 +249,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				buffer[3] = 0;
 				buffer[4] = (byte)(responseLength >> 8);
 				buffer[5] = (byte)(responseLength & 0xff);
-				await stream.WriteAsync(buffer.AsMemory()[..(6 + responseLength)], cancellationToken);
+				await stream.WriteAsync(buffer.AsMemory()[..(6 + responseLength)], cancellationToken).NoSync();
 			}
 		}
 	}

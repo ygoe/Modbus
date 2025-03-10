@@ -13,6 +13,7 @@
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>Unclassified.Modbus</PackageId>
     <Authors>Yves Goergen</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Description>Modbus protocol implementation for .NET</Description>
     <Copyright>Yves Goergen</Copyright>
     <PackageTags>modbus protocol</PackageTags>

@@ -75,7 +75,7 @@ internal static class SerialPortExtensions
 
 			try
 			{
-				return await serialPort.BaseStream.ReadAsync(buffer, cts.Token);
+				return await serialPort.BaseStream.ReadAsync(buffer, cts.Token).NoSync();
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -137,7 +137,7 @@ internal static class SerialPortExtensions
 
 			try
 			{
-				await serialPort.BaseStream.WriteAsync(buffer, cts.Token);
+				await serialPort.BaseStream.WriteAsync(buffer, cts.Token).NoSync();
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{

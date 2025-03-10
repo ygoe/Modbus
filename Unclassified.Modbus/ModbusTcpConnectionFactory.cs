@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Unclassified.Modbus.Util;
 
 namespace Unclassified.Modbus;
 
@@ -32,7 +33,7 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	public async Task<IModbusConnection> GetConnection(ILogger? logger = null, CancellationToken cancellationToken = default)
 	{
 		var connection = new ModbusTcpConnection(logger);
-		await connection.Connect(HostName, Port, cancellationToken);
+		await connection.Connect(HostName, Port, cancellationToken).NoSync();
 		return connection;
 	}
 
