@@ -18,6 +18,9 @@ dotnet publish -c Release -r win-x64 --self-contained -nologo || goto error
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for linux-arm...
 dotnet publish -c Release -r linux-arm --self-contained -nologo || goto error
 
+powershell write-host -fore Blue Building and publishing ModbusClientDemo for linux-arm64...
+dotnet publish -c Release -r linux-arm64 --self-contained -nologo || goto error
+
 :: ----- Finish -----
 
 :: Restore without runtime to clear errors in Visual Studio

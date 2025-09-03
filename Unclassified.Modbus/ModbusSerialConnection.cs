@@ -1,4 +1,4 @@
-﻿using System.IO.Ports;
+using System.IO.Ports;
 using Microsoft.Extensions.Logging;
 using Unclassified.Modbus.Util;
 
@@ -82,18 +82,18 @@ internal class ModbusSerialConnection : IModbusConnection
 						case (byte)FunctionCode.ReadDiscreteInputs:
 						case (byte)FunctionCode.ReadHoldingRegisters:
 						case (byte)FunctionCode.ReadInputRegisters:
-							responseLength = 2 + buffer[2];
+							responseLength = 3 + buffer[2];
 							break;
 						case (byte)FunctionCode.WriteCoil:
 						case (byte)FunctionCode.WriteHoldingRegister:
 						case (byte)FunctionCode.WriteCoils:
 						case (byte)FunctionCode.WriteHoldingRegisters:
-							responseLength = 2 + 4;
+							responseLength = 6;
 							break;
 						case (byte)FunctionCode.ReadDeviceIdentification:
 							if (bufferUsed < 8)
 								break;
-							responseLength = 2 + 6;
+							responseLength = 8;
 							byte count = buffer[7];
 							// NOTE: This count value is underspecified and might be wrong.
 							//       See ModbusClient.DecodeReadIdResponse method's comments.
