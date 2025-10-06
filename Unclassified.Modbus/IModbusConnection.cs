@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus;
+namespace Unclassified.Modbus;
 
 /// <summary>
 /// A client connection to a Modbus server.
@@ -8,7 +8,7 @@ public interface IModbusConnection
 	/// <summary>
 	/// Gets a value indicating whether the connection is currently open.
 	/// </summary>
-	bool IsOpen { get; }
+	public bool IsOpen { get; }
 
 	/// <summary>
 	/// Sends a request in a connection-type-specific message frame to the Modbus server and waits
@@ -18,10 +18,15 @@ public interface IModbusConnection
 	/// <param name="cancellationToken">A cancellation token used to propagate notification that
 	///   this operation should be canceled.</param>
 	/// <returns>The bytes of a complete response received from the server.</returns>
-	Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default);
+	public Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Closes the connection.
 	/// </summary>
-	void Close();
+	public void Close();
+
+	/// <summary>
+	/// Returns the connection busy time, in microseconds, since the last call of the method.
+	/// </summary>
+	public long GetBusyTimeUs() => 0;
 }

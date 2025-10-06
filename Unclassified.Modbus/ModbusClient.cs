@@ -1,4 +1,5 @@
-﻿using System.Text;
+using System.Diagnostics;
+using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Unclassified.Modbus.Util;
@@ -23,6 +24,10 @@ public class ModbusClient : IDisposable
 	private readonly SemaphoreSlim connectionSemaphore = new(1, 1);
 	private readonly Timer connectionIdleTimer;
 	private IModbusConnection? connection;
+
+	private readonly Stopwatch loadStopwatch = Stopwatch.StartNew();
+	private long loadStartTimeUs;
+	private long loadBusyTimeUs;
 
 	#endregion Private data
 
@@ -440,6 +445,40 @@ public class ModbusClient : IDisposable
 			}
 		}
 		return results;
+	}
+
+	/// <summary>
+	/// Gets the connection load statistics since the last call of the method.
+	/// </summary>
+	/// <returns>A value between 0 and 1 that indicates how much of the available time the
+	///   connection was busy.</returns>
+	/// <remarks>
+	/// Load is measured across connections. Times with no open connection are considered as zero
+	/// load.
+	/// </remarks>
+	public double GetLoad()
+	{
+		connectionSemaphore.Wait();
+		try
+		{
+			if (connection?.IsOpen == true)
+			{
+				loadBusyTimeUs += connection.GetBusyTimeUs();
+			}
+		}
+		finally
+		{
+			connectionSemaphore.Release();
+		}
+
+		long nowUs = (long)loadStopwatch.Elapsed.TotalMicroseconds;
+		long elapsedTimeUs = nowUs - loadStartTimeUs;
+		loadStartTimeUs = nowUs;
+
+		long busyTimeUs = loadBusyTimeUs;
+		loadBusyTimeUs = 0;
+
+		return elapsedTimeUs > 0 ? (double)busyTimeUs / elapsedTimeUs : 0;
 	}
 
 	#endregion Public client methods
@@ -884,7 +923,8 @@ public class ModbusClient : IDisposable
 			else
 			{
 				// Close connection immediately
-				connection!.Close();
+				loadBusyTimeUs += connection!.GetBusyTimeUs();
+				connection.Close();
 				connection = null;
 			}
 			connectionSemaphore.Release();
@@ -908,6 +948,7 @@ public class ModbusClient : IDisposable
 		{
 			if (connection?.IsOpen == true)
 			{
+				loadBusyTimeUs += connection.GetBusyTimeUs();
 				connection.Close();
 				connection = null;
 			}

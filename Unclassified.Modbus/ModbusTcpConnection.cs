@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Unclassified.Modbus.Util;
 

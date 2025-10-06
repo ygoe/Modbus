@@ -12,7 +12,9 @@ internal class ModbusSerialConnection : IModbusConnection
 	private readonly ILogger? logger;
 	private SerialPort? serialPort;
 	private RS485? rs485;
+	private double timeUsPerByte;
 	private readonly byte[] buffer = new byte[270];   // Protocol allows 256 = 254 + RTU-specific header
+	private long loadBusyTimeUs;
 
 	public ModbusSerialConnection(ILogger? logger)
 	{
@@ -38,6 +40,21 @@ internal class ModbusSerialConnection : IModbusConnection
 			logger?.LogDebug("Opening {PortName} at {Config}...", portName, serialPort.GetParamDescription());
 		serialPort.OpenClean();
 		logger?.LogDebug("Serial port opened");
+
+		double bitsPerByte = 1 + 8;   // Start bit and data bits
+		if (parity != Parity.None)
+			bitsPerByte += 1;
+		if (stopBitsOverride == StopBits.None)
+			bitsPerByte += 0;
+		else if (stopBitsOverride == StopBits.One)
+			bitsPerByte += 1;
+		else if (stopBitsOverride == StopBits.OnePointFive)
+			bitsPerByte += 1.5;
+		else if (stopBitsOverride == StopBits.Two)
+			bitsPerByte += 2;
+		else
+			bitsPerByte += parity == Parity.None ? 2 : 1;
+		timeUsPerByte = 1000000 * bitsPerByte / baudRate;
 	}
 
 	public async Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default)
@@ -54,6 +71,7 @@ internal class ModbusSerialConnection : IModbusConnection
 		if (logger?.IsEnabled(LogLevel.Trace) == true)
 			logger?.LogTrace("Sending: {HexData}", bytes.Span.ToHexString());
 		await serialPort.WriteAsync(bytes, cancellationToken).NoSync();
+		loadBusyTimeUs += (long)(bytes.Length * timeUsPerByte);
 
 		// Wait for a response
 		int bufferUsed = 0;
@@ -63,6 +81,7 @@ internal class ModbusSerialConnection : IModbusConnection
 			if (readBytes <= 0)
 				throw new IOException($"The serial port received {readBytes} bytes while waiting for a response, got {bufferUsed} bytes so far.");
 			bufferUsed += readBytes;
+			loadBusyTimeUs += (long)(readBytes * timeUsPerByte);
 			if (logger?.IsEnabled(LogLevel.Trace) == true)
 				logger?.LogTrace("Received: {HexData}", buffer.AsSpan(0, bufferUsed).ToHexString());
 
@@ -174,5 +193,12 @@ internal class ModbusSerialConnection : IModbusConnection
 			throw new ModbusException(ModbusError.CrcMismatch);
 		}
 		return responseBody;
+	}
+
+	public long GetBusyTimeUs()
+	{
+		long busyTimeUs = loadBusyTimeUs;
+		loadBusyTimeUs = 0;
+		return busyTimeUs;
 	}
 }
