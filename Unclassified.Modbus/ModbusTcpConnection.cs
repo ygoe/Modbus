@@ -12,6 +12,7 @@ internal class ModbusTcpConnection : IModbusConnection
 	private readonly ILogger? logger;
 	private TcpClient? tcpClient;
 	private int lastTransactionId = 0;
+	private bool ignoreTransactionIdMismatch;
 	private readonly byte[] buffer = new byte[270];   // Protocol allows 260 = 254 + TCP-specific header
 
 	public ModbusTcpConnection(ILogger? logger)
@@ -21,7 +22,7 @@ internal class ModbusTcpConnection : IModbusConnection
 
 	public bool IsOpen => tcpClient?.Client.Connected == true;
 
-	internal async Task Connect(string hostName, int port, CancellationToken cancellationToken = default)
+	internal async Task Connect(string hostName, int port, bool ignoreTransactionIdMismatch, CancellationToken cancellationToken = default)
 	{
 		if (logger?.IsEnabled(LogLevel.Debug) == true)
 			logger?.LogDebug("Connecting to {HostName}:{Port}...", hostName, port);
@@ -30,6 +31,7 @@ internal class ModbusTcpConnection : IModbusConnection
 		await tcpClient.ConnectAsync(hostName, port, cancellationToken).ConfigureAwait(false);
 		if (logger?.IsEnabled(LogLevel.Debug) == true)
 			logger?.LogDebug("Connected to {HostName}:{Port}", hostName, port);
+		this.ignoreTransactionIdMismatch = ignoreTransactionIdMismatch;
 	}
 
 	public async Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default)
@@ -101,8 +103,15 @@ internal class ModbusTcpConnection : IModbusConnection
 		int rcvdTransactionId = response[0] << 8 | response[1];
 		if (rcvdTransactionId != transactionId)
 		{
-			if (logger?.IsEnabled(LogLevel.Debug) == true)
-				logger?.LogDebug("Response transaction ID {RcvdTransactionId} does not match request transaction ID {TransactionId}.", rcvdTransactionId, transactionId);
+			if (ignoreTransactionIdMismatch)
+			{
+				if (logger?.IsEnabled(LogLevel.Debug) == true)
+					logger?.LogDebug("Response transaction ID {RcvdTransactionId} does not match request transaction ID {TransactionId}.", rcvdTransactionId, transactionId);
+			}
+			else
+			{
+				throw new ModbusException(ModbusError.TransactionIdMismatch, $"Response transaction ID ({rcvdTransactionId}) does not match request ({transactionId}).");
+			}
 		}
 		int responseLength = response[4] << 8 | response[5];
 		return response.Slice(6, responseLength);

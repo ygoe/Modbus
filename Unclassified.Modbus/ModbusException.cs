@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus;
+namespace Unclassified.Modbus;
 
 /// <summary>
 /// Represents a Modbus error that was reported by the server or that occurred in the client.
@@ -174,6 +174,11 @@ public enum ModbusError
 	/// operation may have failed or was corrected to a different value.
 	/// </summary>
 	WriteMismatch = 260,
+
+	/// <summary>
+	/// The TCP response transaction ID does not match the request transaction ID.
+	/// </summary>
+	TransactionIdMismatch = 261,
 
 	#endregion Internal client errors (above 255)
 }

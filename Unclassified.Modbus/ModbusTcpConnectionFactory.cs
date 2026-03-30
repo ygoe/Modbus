@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Unclassified.Modbus.Util;
 
 namespace Unclassified.Modbus;
@@ -13,10 +13,12 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	/// </summary>
 	/// <param name="hostName">The name of the network host to connect to.</param>
 	/// <param name="port">The TCP port number to connect to.</param>
-	public ModbusTcpConnectionFactory(string hostName, int port)
+	/// <param name="ignoreTransactionIdMismatch">Ignore non-matching response transaction IDs which can lead to mixing up the read data in unstable network conditions.</param>
+	public ModbusTcpConnectionFactory(string hostName, int port, bool ignoreTransactionIdMismatch)
 	{
 		HostName = hostName;
 		Port = port;
+		IgnoreTransactionIdMismatch = ignoreTransactionIdMismatch;
 	}
 
 	/// <summary>
@@ -29,11 +31,16 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	/// </summary>
 	public int Port { get; }
 
+	/// <summary>
+	/// Gets a value indicating whether non-matching response transaction IDs are ignored.
+	/// </summary>
+	public bool IgnoreTransactionIdMismatch { get; }
+
 	/// <inheritdoc/>
 	public async Task<IModbusConnection> GetConnection(ILogger? logger = null, CancellationToken cancellationToken = default)
 	{
 		var connection = new ModbusTcpConnection(logger);
-		await connection.Connect(HostName, Port, cancellationToken).NoSync();
+		await connection.Connect(HostName, Port, IgnoreTransactionIdMismatch, cancellationToken).NoSync();
 		return connection;
 	}
 

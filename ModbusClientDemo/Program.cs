@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO.Ports;
 using System.Net.Sockets;
 using System.Text;
@@ -267,11 +267,11 @@ public class Program
 
 				if ((match = Regex.Match(args[i], @"^(\S+?):(\d+)$")).Success)
 				{
-					connectionFactory = new ModbusTcpConnectionFactory(match.Groups[1].Value, int.Parse(match.Groups[2].Value));
+					connectionFactory = new ModbusTcpConnectionFactory(match.Groups[1].Value, int.Parse(match.Groups[2].Value), false);
 				}
 				else if ((match = Regex.Match(args[i], @"^(\S+?)$")).Success)
 				{
-					connectionFactory = new ModbusTcpConnectionFactory(match.Groups[1].Value, 502);
+					connectionFactory = new ModbusTcpConnectionFactory(match.Groups[1].Value, 502, false);
 				}
 				else
 				{
