@@ -887,7 +887,23 @@ public class ModbusClient : IDisposable
 				catch (Exception ex)
 				{
 					if (retryCount-- <= 0 || ex is OperationCanceledException)
+					{
+						if (ex is ModbusException modbusEx)
+						{
+							if (modbusEx.Code == ModbusError.CrcMismatch ||
+								modbusEx.Code == ModbusError.AddressMismatch ||
+								modbusEx.Code == ModbusError.IncompleteResponse ||
+								modbusEx.Code == ModbusError.TransactionIdMismatch)
+							{
+								// This error suggests that the connection is out of sync somehow.
+								// Close it and start fresh, maybe that helps to recover.
+								logger?.LogWarning("Connection seems out of sync (error code: {ErrorCode}), closing connection to recover.", modbusEx.Code);
+								connection?.Close();
+							}
+						}
+						// Finally fail the request, we've done all we can
 						throw;
+					}
 					if (ex is TimeoutException)
 					{
 						if (writeSingle == true && !AlwaysWriteSingle && !AlwaysWriteMultiple)
