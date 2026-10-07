@@ -154,7 +154,7 @@ public readonly struct ModbusRange
 	public static IList<ModbusRange> Combine(IEnumerable<ModbusRange> ranges, int maxLength, int allowedWaste)
 	{
 		if (maxLength <= 0)
-			maxLength = int.MaxValue;
+			maxLength = 0x10000;   // Whole address space
 
 		var orderedRanges = ranges.OrderBy(r => r.StartAddress).ThenByDescending(r => r.EndAddress).ToList();
 		for (int i = 0; i < orderedRanges.Count; i++)
@@ -177,7 +177,10 @@ public readonly struct ModbusRange
 					// or follows within allowed gap and combined range (after expected splitting)
 					// does not exceed max length:
 					// extend current and remove next range
-					orderedRanges[i] = new(orderedRanges[i].StartAddress, orderedRanges[j].EndAddress);
+					ushort endAddress = Math.Max(
+						orderedRanges[i].EndAddress,
+						orderedRanges[j].EndAddress);
+					orderedRanges[i] = new(orderedRanges[i].StartAddress, endAddress);
 					orderedRanges.RemoveAt(j);
 					j--;
 				}

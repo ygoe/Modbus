@@ -85,6 +85,33 @@ public class ModbusRangeTests
 	}
 
 	/// <summary>
+	/// Checks that a range inside another range does not shorten it.
+	/// </summary>
+	[TestMethod]
+	public void Combine_ContainedRange_KeepsOuterRange()
+	{
+		AssertCombine([new(0, 10), new(2, 5)], 100, 0, [new(0, 10)]);
+	}
+
+	/// <summary>
+	/// Checks that of 2 ranges with the same start address, the longer one is kept.
+	/// </summary>
+	[TestMethod]
+	public void Combine_SameStartAddress_KeepsLongerRange()
+	{
+		AssertCombine([new(0, 5), new(0, 10)], 100, 0, [new(0, 10)]);
+	}
+
+	/// <summary>
+	/// Checks that a maximum length of 0 merges ranges without limiting their length.
+	/// </summary>
+	[TestMethod]
+	public void Combine_NoMaxLength_MergesWithoutSplitting()
+	{
+		AssertCombine([new(5, 9), new(10, 3000)], 0, 0, [new(5, 3000)]);
+	}
+
+	/// <summary>
 	/// Checks that the input order and duplicate ranges do not matter.
 	/// </summary>
 	[TestMethod]
