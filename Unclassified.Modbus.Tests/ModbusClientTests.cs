@@ -214,6 +214,22 @@ public class ModbusClientTests
 	}
 
 	/// <summary>
+	/// Checks that the error of a failing connection attempt is thrown without an idle timeout.
+	/// </summary>
+	[TestMethod]
+	public async Task Read_ConnectFailsWithoutIdleTimeout_ThrowsConnectError()
+	{
+		var connection = new FakeConnection(request => MakeRegisterReadResponse(request))
+		{
+			ConnectException = new IOException()
+		};
+		using var client = CreateClient(connection, idleTimeout: TimeSpan.Zero);
+
+		await Assert.ThrowsExactlyAsync<IOException>(
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+	}
+
+	/// <summary>
 	/// Checks that the request events contain the request and response data.
 	/// </summary>
 	[TestMethod]

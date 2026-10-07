@@ -936,10 +936,10 @@ public class ModbusClient : IDisposable
 			{
 				connectionIdleTimer.Change(IdleTimeout, Timeout.InfiniteTimeSpan);
 			}
-			else
+			else if (connection != null)
 			{
 				// Close connection immediately
-				loadBusyTimeUs += connection!.GetBusyTimeUs();
+				loadBusyTimeUs += connection.GetBusyTimeUs();
 				connection.Close();
 				connection = null;
 			}
