@@ -28,7 +28,7 @@ internal class ModbusTcpConnection : IModbusConnection
 			logger?.LogDebug("Connecting to {HostName}:{Port}...", hostName, port);
 		tcpClient = new TcpClient(AddressFamily.InterNetworkV6);
 		tcpClient.Client.DualMode = true;
-		await tcpClient.ConnectAsync(hostName, port, cancellationToken).ConfigureAwait(false);
+		await tcpClient.ConnectAsync(hostName, port, cancellationToken).NoSync();
 		if (logger?.IsEnabled(LogLevel.Debug) == true)
 			logger?.LogDebug("Connected to {HostName}:{Port}", hostName, port);
 		this.ignoreTransactionIdMismatch = ignoreTransactionIdMismatch;
