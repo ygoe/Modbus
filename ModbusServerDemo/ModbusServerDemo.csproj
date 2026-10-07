@@ -11,4 +11,8 @@
     <ProjectReference Include="..\Unclassified.Modbus\Unclassified.Modbus.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="..\ModbusClientDemo\Util\ConsoleLogger.cs" Link="Util\ConsoleLogger.cs" />
+  </ItemGroup>
+
 </Project>

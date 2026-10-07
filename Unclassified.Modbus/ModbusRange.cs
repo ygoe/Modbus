@@ -201,15 +201,45 @@ public readonly struct ModbusRange
 	#region Static helper functions
 
 	/// <summary>
-	/// Returns the maximum range length for requests about the specified Modbus object type.
+	/// Returns the maximum range length for read requests about the specified Modbus object type.
 	/// </summary>
 	/// <param name="objectType">The Modbus object type.</param>
-	/// <returns></returns>
+	/// <returns>The maximum number of objects in a single read request.</returns>
+	public static int GetMaxReadLength(ModbusObjectType objectType) => objectType switch
+	{
+		// Modbus Application Protocol Specification V1.1b3, sections 6.1 and 6.2: 0x07D0
+		ModbusObjectType.Coil or ModbusObjectType.DiscreteInput => 2000,
+		// Modbus Application Protocol Specification V1.1b3, sections 6.3 and 6.4: 0x007D
+		ModbusObjectType.HoldingRegister or ModbusObjectType.InputRegister => 125,
+		_ => throw new ArgumentException("Invalid object type.")
+	};
+
+	/// <summary>
+	/// Returns the maximum range length for write requests about the specified Modbus object type.
+	/// </summary>
+	/// <param name="objectType">The Modbus object type. Only coils and holding registers can be
+	///   written.</param>
+	/// <returns>The maximum number of objects in a single write request.</returns>
+	public static int GetMaxWriteLength(ModbusObjectType objectType) => objectType switch
+	{
+		// Modbus Application Protocol Specification V1.1b3, section 6.11: 0x07B0
+		ModbusObjectType.Coil => 1968,
+		// Modbus Application Protocol Specification V1.1b3, section 6.12: 0x007B
+		ModbusObjectType.HoldingRegister => 123,
+		_ => throw new ArgumentException("Invalid object type for writing.")
+	};
+
+	/// <summary>
+	/// Returns the maximum range length for read and write requests about the specified Modbus
+	/// object type.
+	/// </summary>
+	/// <param name="objectType">The Modbus object type.</param>
+	/// <returns>The maximum number of objects in a single request.</returns>
+	[Obsolete("Use GetMaxReadLength or GetMaxWriteLength instead.")]
 	public static int GetMaxLength(ModbusObjectType objectType) => objectType switch
 	{
-		ModbusObjectType.Coil or ModbusObjectType.DiscreteInput => 2008,
-		ModbusObjectType.HoldingRegister or ModbusObjectType.InputRegister => 123,
-		_ => throw new ArgumentException("Invalid object type.")
+		ModbusObjectType.Coil or ModbusObjectType.HoldingRegister => GetMaxWriteLength(objectType),
+		_ => GetMaxReadLength(objectType)
 	};
 
 	#endregion Static helper functions

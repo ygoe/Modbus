@@ -215,7 +215,7 @@ public class ModbusClient : IDisposable
 	{
 		ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-		int limitLength = ModbusRange.GetMaxLength(objectType);
+		int limitLength = ModbusRange.GetMaxReadLength(objectType);
 		int maxRequestLength = MaxRequestLength;
 		if (maxRequestLength <= 0 || maxRequestLength > limitLength)
 			maxRequestLength = limitLength;
@@ -287,7 +287,7 @@ public class ModbusClient : IDisposable
 	{
 		ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-		int limitLength = ModbusRange.GetMaxLength(objects.ObjectType);
+		int limitLength = ModbusRange.GetMaxWriteLength(objects.ObjectType);
 		int maxRequestLength = MaxRequestLength;
 		if (maxRequestLength <= 0 || maxRequestLength > limitLength)
 			maxRequestLength = limitLength;

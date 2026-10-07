@@ -49,6 +49,13 @@ public class ModbusTcpListener : IDisposable, IHostedService
 	/// </summary>
 	public int Port { get; set; }
 
+	/// <summary>
+	/// Gets or sets the maximum time to wait for the remaining data of a request after its first
+	/// byte has been received. The connection is closed if the request is not complete in time.
+	/// Default is 2 seconds. Set to <see cref="Timeout.InfiniteTimeSpan"/> to wait infinitely.
+	/// </summary>
+	public TimeSpan IncompleteRequestTimeout { get; set; } = TimeSpan.FromSeconds(2);
+
 	#endregion Properties
 
 	#region IHostedService implementation
@@ -133,10 +140,20 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				clients.TryAdd(tcpClient, true);
 				var clientTask = Task.Run(async () =>
 				{
-					await RunClientConnection(tcpClient).NoSync();
-					tcpClient.Dispose();
-					logger?.LogInformation("Client disconnected from {Endpoint}", endpoint);
-					clients.TryRemove(tcpClient, out _);
+					try
+					{
+						await RunClientConnection(tcpClient).NoSync();
+					}
+					catch (Exception ex)
+					{
+						logger?.LogError(ex, "Error in connection from {Endpoint}: {Message}", endpoint, ex.Message);
+					}
+					finally
+					{
+						tcpClient.Dispose();
+						logger?.LogInformation("Client disconnected from {Endpoint}", endpoint);
+						clients.TryRemove(tcpClient, out _);
+					}
 				}, CancellationToken.None);
 				clientTasks.RemoveAll(t => t.IsCompleted);
 				clientTasks.Add(clientTask);
@@ -180,82 +197,129 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		// buffer as needed for the next message. It will continue each time a complete new request
 		// message was received.
 		using var stopReadCts = new CancellationTokenSource();
-		var readTask = ReadFromClient(stream, byteBuffer, stopReadCts.Token);
+		var readTask = ReadFromClient(tcpClient, stream, byteBuffer, stopReadCts.Token);
 
-		// 10 KiB should be enough for every Ethernet packet
-		byte[] buffer = new byte[10240];
-		while (true)
+		try
 		{
-			int readLength;
-			try
+			// 10 KiB should be enough for every Ethernet packet
+			byte[] buffer = new byte[10240];
+			while (true)
 			{
-				readLength = await stream.ReadAsync(buffer).NoSync();
-				if (readLength == 0)
-					logger?.LogInformation("Connection closed remotely");
+				int readLength;
+				try
+				{
+					readLength = await stream.ReadAsync(buffer).NoSync();
+					if (readLength == 0)
+						logger?.LogInformation("Connection closed remotely");
+				}
+				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.OperationAborted } ||
+					ex.InnerException is SocketException { ErrorCode: 125 } /* Operation canceled (Linux) */)
+				{
+					// Warning: This error code number (995) may change.
+					// See https://docs.microsoft.com/en-us/windows/desktop/winsock/windows-sockets-error-codes-2
+					// Note: NativeErrorCode and ErrorCode 125 observed on Linux.
+					logger?.LogInformation("Connection closed locally");
+					readLength = -1;
+				}
+				catch (ObjectDisposedException)
+				{
+					logger?.LogInformation("Connection closed locally");
+					readLength = -1;
+				}
+				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionAborted })
+				{
+					logger?.LogWarning("Connection aborted");
+					readLength = -1;
+				}
+				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionReset })
+				{
+					logger?.LogWarning("Connection reset remotely");
+					readLength = -2;
+				}
+				if (readLength <= 0)
+					break;
+				byteBuffer.Enqueue(buffer, 0, readLength);
 			}
-			catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.OperationAborted } ||
-				ex.InnerException is SocketException { ErrorCode: 125 } /* Operation canceled (Linux) */)
-			{
-				// Warning: This error code number (995) may change.
-				// See https://docs.microsoft.com/en-us/windows/desktop/winsock/windows-sockets-error-codes-2
-				// Note: NativeErrorCode and ErrorCode 125 observed on Linux.
-				logger?.LogInformation("Connection closed locally");
-				readLength = -1;
-			}
-			catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionAborted })
-			{
-				logger?.LogWarning("Connection aborted");
-				readLength = -1;
-			}
-			catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionReset })
-			{
-				logger?.LogWarning("Connection reset remotely");
-				readLength = -2;
-			}
-			if (readLength <= 0)
-				break;
-			byteBuffer.Enqueue(buffer[..readLength]);
 		}
-
-		stopReadCts.Cancel();
-		await readTask.IgnoreCanceled().NoSync();
+		finally
+		{
+			stopReadCts.Cancel();
+			await readTask.IgnoreCanceled().NoSync();
+		}
 	}
 
 	/// <summary>
-	/// Reads data from a client and processes full received request messages.
+	/// Reads data from a client and processes full received request messages. If processing ends
+	/// for any other reason than the <paramref name="cancellationToken"/>, the connection is
+	/// closed.
 	/// </summary>
-	private async Task ReadFromClient(NetworkStream stream, ByteBuffer byteBuffer, CancellationToken cancellationToken)
+	private async Task ReadFromClient(TcpClient tcpClient, NetworkStream stream, ByteBuffer byteBuffer, CancellationToken cancellationToken)
 	{
-		byte[] buffer = new byte[260];
-		while (true)
+		// MBAP header without the unit ID (6 bytes), then unit ID and PDU (max. 1 + 253 bytes)
+		byte[] header = new byte[6];
+		byte[] requestBuffer = new byte[254];
+		byte[] responseBuffer = new byte[6 + 254];
+		try
 		{
-			await byteBuffer.DequeueAsync(buffer, 0, 6, cancellationToken).NoSync();
-			int transactionId = buffer[0] << 8 | buffer[1];
-			int length = buffer[4] << 8 | buffer[5];
-			if (length > 254)
+			while (true)
 			{
-				// TODO: Message frame is too long: read and ignore, read and respond with error, or close connection
-				return;
+				// Wait for the next request without time limit
+				await byteBuffer.WaitAsync(cancellationToken).NoSync();
+
+				int length;
+				using (var timeoutCts = TaskHelper.CreateTimeoutCancellationTokenSource(cancellationToken, IncompleteRequestTimeout))
+				{
+					try
+					{
+						await byteBuffer.DequeueAsync(header, 0, 6, timeoutCts.Token).NoSync();
+						length = header[4] << 8 | header[5];
+						if (length < 2 || length > requestBuffer.Length)
+						{
+							// The start of the next request cannot be found after an invalid length
+							logger?.LogWarning("Invalid request length {Length}, closing connection", length);
+							return;
+						}
+						await byteBuffer.DequeueAsync(requestBuffer, 0, length, timeoutCts.Token).NoSync();
+					}
+					catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+					{
+						logger?.LogWarning("Incomplete request was not received in time, closing connection");
+						return;
+					}
+				}
+
+				int protocolId = header[2] << 8 | header[3];
+				if (protocolId != 0)
+				{
+					logger?.LogDebug("Ignoring request with unsupported protocol ID {ProtocolId}", protocolId);
+					continue;
+				}
+
+				int responseLength = await requestHandler.HandleRequest(requestBuffer.AsMemory(0, length), responseBuffer.AsMemory(6), cancellationToken).NoSync();
+				if (responseLength < 0)
+				{
+					logger?.LogInformation("Closing connection as requested by the request handler");
+					return;
+				}
+				if (responseLength > 0)
+				{
+					// Send a response with the transaction ID and protocol ID from the request
+					Array.Copy(header, responseBuffer, 4);
+					responseBuffer[4] = (byte)(responseLength >> 8);
+					responseBuffer[5] = (byte)(responseLength & 0xff);
+					await stream.WriteAsync(responseBuffer.AsMemory(0, 6 + responseLength), cancellationToken).NoSync();
+				}
 			}
-			// TODO: Timeout for the remaining data
-			await byteBuffer.DequeueAsync(buffer, 0, length, cancellationToken).NoSync();
-			int responseLength = await requestHandler.HandleRequest(buffer.AsMemory()[..length], buffer.AsMemory(6)).NoSync();
-			if (responseLength < 0)
-			{
-				// Close the connection
-				return;
-			}
-			if (responseLength > 0)
-			{
-				// Send a response
-				buffer[0] = (byte)(transactionId >> 8);   // Transaction ID
-				buffer[1] = (byte)(transactionId & 0xff);   // Transaction ID
-				buffer[2] = 0;
-				buffer[3] = 0;
-				buffer[4] = (byte)(responseLength >> 8);
-				buffer[5] = (byte)(responseLength & 0xff);
-				await stream.WriteAsync(buffer.AsMemory()[..(6 + responseLength)], cancellationToken).NoSync();
-			}
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+		{
+			logger?.LogError(ex, "Error processing requests, closing connection: {Message}", ex.Message);
+		}
+		finally
+		{
+			// Also stop receiving data if processing has ended (no effect if the connection was
+			// already closed which cancelled this method)
+			tcpClient.Close();
 		}
 	}
 
