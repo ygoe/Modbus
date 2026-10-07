@@ -139,7 +139,7 @@ internal class ModbusSerialConnection : IModbusConnection
 						// ID (1 byte)
 						// Length (1 byte)
 						// Value (length bytes)
-						if (received.Length < responseLength + 1)
+						if (received.Length < responseLength + 2)
 						{
 							responseLength = -1;
 							break;

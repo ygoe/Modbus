@@ -98,7 +98,9 @@ public class ModbusSerialConnectionTests
 	[TestMethod]
 	[DataRow(7)]
 	[DataRow(8)]
+	[DataRow(9)]
 	[DataRow(13)]
+	[DataRow(14)]
 	public void GetResponseBodyLength_DeviceIdentification_Incomplete(int receivedLength)
 	{
 		int length = ModbusSerialConnection.GetResponseBodyLength(
