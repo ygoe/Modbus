@@ -45,9 +45,16 @@ public class ModbusTcpListener : IDisposable, IHostedService
 	public IPAddress IPAddress { get; set; } = IPAddress.IPv6Any;
 
 	/// <summary>
-	/// Gets or sets the port on which to listen for incoming connection attempts.
+	/// Gets or sets the port on which to listen for incoming connection attempts. Set to 0 to use
+	/// any available port; <see cref="LocalEndPoint"/> provides it after starting.
 	/// </summary>
 	public int Port { get; set; }
+
+	/// <summary>
+	/// Gets the local IP address and port on which the listener accepts connections, or null if
+	/// it is not running.
+	/// </summary>
+	public IPEndPoint? LocalEndPoint => (IPEndPoint?)tcpListener?.LocalEndpoint;
 
 	/// <summary>
 	/// Gets or sets the maximum time to wait for the remaining data of a request after its first
@@ -70,7 +77,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 	{
 		if (tcpListener != null)
 			throw new InvalidOperationException("The listener service is already running.");
-		if (Port <= 0 || Port > ushort.MaxValue)
+		if (Port < 0 || Port > ushort.MaxValue)
 			throw new ArgumentException($"The port number is not in the valid range: {Port}");
 
 		tcpListener = new TcpListener(IPAddress, Port);
