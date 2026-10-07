@@ -10,13 +10,16 @@ A Modbus library for .NET (NuGet package `Unclassified.Modbus`) implementing a c
 
 ```
 dotnet build Modbus.sln
+dotnet test Unclassified.Modbus.Tests
 ```
 
-The build also creates the NuGet package; the version is derived from git by `Unclassified.NetRevisionTask`. There is no test project. The build is currently free of warnings; keep it that way.
+The build also creates the NuGet package; the version is derived from git by `Unclassified.NetRevisionTask`. The build is currently free of warnings; keep it that way.
+
+The tests use MSTest and reach the library's internal classes through `InternalsVisibleTo`.
 
 ## Architectural big picture
 
-The solution contains the library `Unclassified.Modbus` and the console apps `ModbusClientDemo` and `ModbusServerDemo`, which show how to use it. `ModbusServerDemo` compiles `ModbusClientDemo/Util/ConsoleLogger.cs` as a linked file.
+The solution contains the library `Unclassified.Modbus`, its tests in `Unclassified.Modbus.Tests`, and the console apps `ModbusClientDemo` and `ModbusServerDemo`, which show how to use it. `ModbusServerDemo` compiles `ModbusClientDemo/Util/ConsoleLogger.cs` as a linked file.
 
 - **Message bodies:** Inside the library, a "request body" or "response body" is the device ID (unit ID) followed by the PDU (function code and data). Only the transport classes add and remove the framing (MBAP header for TCP, CRC for RTU).
 - **Client:** `ModbusClient` is the public API (`Read`, `Write`, `ReadDeviceIdentification`). It encodes and decodes the PDUs, splits and merges address ranges within the protocol limits (`ModbusRange.Combine`), retries after busy responses, timeouts and other errors, and detects by trial whether a device only accepts the single or the multiple write function codes (`AlwaysWriteSingle`, `AlwaysWriteMultiple`). It holds one connection at a time behind a semaphore, so requests never overlap, and closes it after `IdleTimeout`.
