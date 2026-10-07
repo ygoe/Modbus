@@ -387,6 +387,65 @@ public class ModbusClientTests
 		Assert.IsTrue(client.AlwaysWriteMultiple);
 	}
 
+	/// <summary>
+	/// Checks that each register is written individually if a device rejects the multiple write
+	/// function.
+	/// </summary>
+	[TestMethod]
+	public async Task Write_MultipleRejected_WritesEachRegister()
+	{
+		var connection = new FakeConnection(request =>
+			request[1] == 16 ? [1, 0x90, (byte)ModbusError.IllegalFunction] : request);
+		using var client = CreateClient(connection);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0x1111);
+		objects.SetUInt16(0x11, 0x2222);
+		objects.SetUInt16(0x12, 0x3333);
+
+		await client.Write(1, objects);
+
+		byte[][] expectedSingleRequests =
+		[
+			[1, 6, 0x00, 0x10, 0x11, 0x11],
+			[1, 6, 0x00, 0x11, 0x22, 0x22],
+			[1, 6, 0x00, 0x12, 0x33, 0x33]
+		];
+		Assert.IsTrue(client.AlwaysWriteSingle);
+		Assert.HasCount(4, connection.Requests);
+		Assert.AreEqual((byte)16, connection.Requests[0][1]);
+		for (int i = 0; i < expectedSingleRequests.Length; i++)
+		{
+			CollectionAssert.AreEqual(expectedSingleRequests[i], connection.Requests[i + 1]);
+		}
+	}
+
+	/// <summary>
+	/// Checks that the remaining registers are written if a device confirms fewer than
+	/// requested.
+	/// </summary>
+	[TestMethod]
+	public async Task Write_FewerConfirmed_WritesRemainder()
+	{
+		var connection = new FakeConnection(request =>
+		{
+			// Confirm at most 2 registers
+			byte[] response = request[..6];
+			response[4] = 0;
+			response[5] = Math.Min(request[5], (byte)2);
+			return response;
+		});
+		using var client = CreateClient(connection);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt32(0x10, 0x11112222);
+		objects.SetUInt32(0x12, 0x33334444);
+
+		await client.Write(1, objects);
+
+		CollectionAssert.AreEqual(new[] { (0x10, 4), (0x12, 2) }, GetStartAndCounts(connection));
+		byte[] expectedRequest = [1, 16, 0x00, 0x12, 0x00, 0x02, 4, 0x33, 0x33, 0x44, 0x44];
+		CollectionAssert.AreEqual(expectedRequest, connection.Requests[1]);
+	}
+
 	#endregion Write
 
 	#region Read device identification

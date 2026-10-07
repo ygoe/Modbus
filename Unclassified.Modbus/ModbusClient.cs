@@ -303,8 +303,9 @@ public class ModbusClient : IDisposable
 				responseEventArgs = ResponseReceived != null ? new ResponseEventArgs() : null;
 				bool writeSingle = (AlwaysWriteSingle || range.Length == 1) && !AlwaysWriteMultiple;
 				var requestBody = writeSingle ?
-					MakeSingleWriteRequest((byte)deviceId, range.StartAddress, objects) :
-					MakeMultipleWriteRequest((byte)deviceId, range.StartAddress, range.Length, objects);
+					MakeSingleWriteRequest((byte)deviceId, currentRange.StartAddress, objects) :
+					MakeMultipleWriteRequest(
+						(byte)deviceId, currentRange.StartAddress, currentRange.Length, objects);
 				var responseBody = await SendRequest(requestBody, cancellationToken, writeSingle: writeSingle).NoSync();
 				if (responseBody.IsEmpty)
 				{
@@ -317,7 +318,8 @@ public class ModbusClient : IDisposable
 					if (writeSingle)
 						DecodeSingleWriteResponse(responseBody, currentRange.StartAddress, objects);
 					else
-						writtenCount = DecodeMultipleWriteResponse(responseBody, currentRange.StartAddress, range.Length);
+						writtenCount = DecodeMultipleWriteResponse(
+							responseBody, currentRange.StartAddress, currentRange.Length);
 					if (responseEventArgs != null)
 						ResponseReceived?.Invoke(this, responseEventArgs);
 				}
