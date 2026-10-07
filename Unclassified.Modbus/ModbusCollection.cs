@@ -319,7 +319,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 			objects.RemoveAll(e => e.Address == address + addressOffset);
 			ushort word = (ushort)(encoding.GetBytes([value[addressOffset * 2]])[0] << 8);
 			if (addressOffset * 2 + 1 < value.Length)
-				word |= encoding.GetBytes([value[addressOffset * 2]])[0];
+				word |= encoding.GetBytes([value[addressOffset * 2 + 1]])[0];
 			objects.Add(CreateValueObject(address + addressOffset, word));
 		}
 	}
