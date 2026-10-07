@@ -382,6 +382,7 @@ internal class ByteBuffer
 				if (count <= Count)
 				{
 					Dequeue(buffer, offset, count);
+					return;
 				}
 				myDequeueManualTcs = Reset(ref dequeueManualTcs);
 			}
