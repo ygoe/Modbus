@@ -123,6 +123,11 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					// Listener was stopped
 					break;
 				}
+				catch (SocketException ex) when (ex.SocketErrorCode == SocketError.OperationAborted)
+				{
+					// Listener was stopped (Windows)
+					break;
+				}
 				var endpoint = tcpClient.Client.RemoteEndPoint;
 				logger?.LogInformation("Client connected from {Endpoint}", endpoint);
 				clients.TryAdd(tcpClient, true);
