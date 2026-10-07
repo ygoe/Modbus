@@ -142,6 +142,11 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					// Listener was stopped (Windows)
 					break;
 				}
+				catch (InvalidOperationException)
+				{
+					// Listener was stopped before accepting
+					break;
+				}
 				var endpoint = tcpClient.Client.RemoteEndPoint;
 				logger?.LogInformation("Client connected from {Endpoint}", endpoint);
 				clients.TryAdd(tcpClient, true);
