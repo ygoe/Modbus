@@ -85,67 +85,78 @@ internal class ModbusSerialConnection : IModbusConnection
 			if (logger?.IsEnabled(LogLevel.Trace) == true)
 				logger?.LogTrace("Received: {HexData}", buffer.AsSpan(0, bufferUsed).ToHexString());
 
-			if (bufferUsed >= 3)
-			{
-				// There is no universal frame length indication in the RTU format, so we need to
-				// interpret the body data to the extent that we can determine its length. Full
-				// decoding and processing is performed at a later stage.
-				int responseLength = -1;
-
-				byte functionCode = buffer[1];
-				if ((functionCode & 0x80) == 0)
-				{
-					switch (functionCode)
-					{
-						case (byte)FunctionCode.ReadCoils:
-						case (byte)FunctionCode.ReadDiscreteInputs:
-						case (byte)FunctionCode.ReadHoldingRegisters:
-						case (byte)FunctionCode.ReadInputRegisters:
-							responseLength = 3 + buffer[2];
-							break;
-						case (byte)FunctionCode.WriteCoil:
-						case (byte)FunctionCode.WriteHoldingRegister:
-						case (byte)FunctionCode.WriteCoils:
-						case (byte)FunctionCode.WriteHoldingRegisters:
-							responseLength = 6;
-							break;
-						case (byte)FunctionCode.ReadDeviceIdentification:
-							if (bufferUsed < 8)
-								break;
-							responseLength = 8;
-							byte count = buffer[7];
-							// NOTE: This count value is underspecified and might be wrong.
-							//       See ModbusClient.DecodeReadIdResponse method's comments.
-							//       But for the serial transport, it's all we have.
-							// Now expect count entries of the following structure
-							for (int i = 0; i < count; i++)
-							{
-								// ID (1 byte)
-								// Length (1 byte)
-								// Value (length bytes)
-								if (bufferUsed < responseLength + 1)
-								{
-									responseLength = -1;
-									break;
-								}
-								responseLength += 2 + buffer[responseLength + 1];
-							}
-							break;
-						default:
-							throw new NotImplementedException($"The Modbus function {functionCode} is not implemented.");
-					}
-				}
-				else
-				{
-					// Error response
-					responseLength = 3;
-				}
-
-				if (responseLength != -1 && bufferUsed >= responseLength + 2)
-					break;
-			}
+			int responseLength = GetResponseBodyLength(buffer.AsSpan(0, bufferUsed));
+			if (responseLength != -1 && bufferUsed >= responseLength + 2)
+				break;
 		}
 		return ExtractResponseBody(buffer.AsSpan(0, bufferUsed)).ToArray();
+	}
+
+	/// <summary>
+	/// Returns the length of the response body from the bytes received so far.
+	/// </summary>
+	/// <param name="received">The bytes received so far, starting with the device ID.</param>
+	/// <returns>The length of the response body without the CRC, or -1 if more bytes are needed
+	///   to determine it.</returns>
+	internal static int GetResponseBodyLength(ReadOnlySpan<byte> received)
+	{
+		if (received.Length < 3)
+			return -1;
+
+		// There is no universal frame length indication in the RTU format, so we need to
+		// interpret the body data to the extent that we can determine its length. Full
+		// decoding and processing is performed at a later stage.
+		int responseLength = -1;
+
+		byte functionCode = received[1];
+		if ((functionCode & 0x80) == 0)
+		{
+			switch (functionCode)
+			{
+				case (byte)FunctionCode.ReadCoils:
+				case (byte)FunctionCode.ReadDiscreteInputs:
+				case (byte)FunctionCode.ReadHoldingRegisters:
+				case (byte)FunctionCode.ReadInputRegisters:
+					responseLength = 3 + received[2];
+					break;
+				case (byte)FunctionCode.WriteCoil:
+				case (byte)FunctionCode.WriteHoldingRegister:
+				case (byte)FunctionCode.WriteCoils:
+				case (byte)FunctionCode.WriteHoldingRegisters:
+					responseLength = 6;
+					break;
+				case (byte)FunctionCode.ReadDeviceIdentification:
+					if (received.Length < 8)
+						break;
+					responseLength = 8;
+					byte count = received[7];
+					// NOTE: This count value is underspecified and might be wrong.
+					//       See ModbusClient.DecodeReadIdResponse method's comments.
+					//       But for the serial transport, it's all we have.
+					// Now expect count entries of the following structure
+					for (int i = 0; i < count; i++)
+					{
+						// ID (1 byte)
+						// Length (1 byte)
+						// Value (length bytes)
+						if (received.Length < responseLength + 1)
+						{
+							responseLength = -1;
+							break;
+						}
+						responseLength += 2 + received[responseLength + 1];
+					}
+					break;
+				default:
+					throw new NotImplementedException($"The Modbus function {functionCode} is not implemented.");
+			}
+		}
+		else
+		{
+			// Error response
+			responseLength = 3;
+		}
+		return responseLength;
 	}
 
 	public void Close()
