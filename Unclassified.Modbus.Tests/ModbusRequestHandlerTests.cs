@@ -198,7 +198,7 @@ public class ModbusRequestHandlerTests
 
 		CollectionAssert.AreEqual(new byte[] { 1, 15, 0x00, 0x00, 0x00, 10 }, response);
 		CollectionAssert.AreEqual(new[] { new ModbusRange(0, 9) }, handler.WrittenRanges);
-		bool[] states = Enumerable.Range(0, 10).Select(a => handler.Coils[(ushort)a]).ToArray();
+		bool[] states = [.. Enumerable.Range(0, 10).Select(a => handler.Coils[(ushort)a])];
 		CollectionAssert.AreEqual(
 			new[] { true, false, true, false, false, false, false, false, false, true },
 			states);

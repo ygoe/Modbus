@@ -28,7 +28,7 @@ public class ModbusTcpListenerTests
 	{
 		using var listener = await StartListener(new MemoryRequestHandler());
 		var localEndPoint = listener.LocalEndPoint;
-		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
+		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout, TestContext.CancellationToken);
 
 		Assert.IsNotNull(localEndPoint);
 		Assert.AreNotEqual(0, localEndPoint.Port);
@@ -50,10 +50,11 @@ public class ModbusTcpListenerTests
 		ModbusCollection objects;
 		using (var client = new ModbusClient(connectionFactory, null))
 		{
-			objects = await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0));
+			objects = await client.Read(
+				ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken);
 		}
 		using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-		await listener.StopAsync(cts.Token).WaitAsync(stopTimeout);
+		await listener.StopAsync(cts.Token).WaitAsync(stopTimeout, TestContext.CancellationToken);
 
 		Assert.AreEqual((ushort)0x1234, objects.GetUInt16(0));
 	}
@@ -68,7 +69,8 @@ public class ModbusTcpListenerTests
 		for (int i = 0; i < 10; i++)
 		{
 			using var listener = await StartListener(new MemoryRequestHandler());
-			await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
+			await listener.StopAsync(CancellationToken.None)
+				.WaitAsync(stopTimeout, TestContext.CancellationToken);
 		}
 	}
 
@@ -80,8 +82,8 @@ public class ModbusTcpListenerTests
 	{
 		using var listener = await StartListener(new MemoryRequestHandler());
 
-		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
-		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
+		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout, TestContext.CancellationToken);
+		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout, TestContext.CancellationToken);
 
 		Assert.IsNull(listener.LocalEndPoint);
 	}
@@ -114,6 +116,8 @@ public class ModbusTcpListenerTests
 		await listener.StartAsync(CancellationToken.None);
 		return listener;
 	}
+
+	public TestContext TestContext { get; set; }
 
 	#endregion Helper methods
 }

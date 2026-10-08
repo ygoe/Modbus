@@ -69,9 +69,9 @@ public class ModbusTcpTests
 		objects.SetString8(102, "ABCDE");
 		objects.SetDouble(105, -1234.5678);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 		var range = new ModbusRange(100, 108);
-		var result = await client.Read(ModbusObjectType.HoldingRegister, 1, range);
+		var result = await client.Read(ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
 
 		Assert.AreEqual(0x12345678u, result.GetUInt32(100));
 		Assert.AreEqual("ABCDE", result.GetString8(102, 5));
@@ -92,8 +92,9 @@ public class ModbusTcpTests
 			objects.SetState(address, address % 3 == 0);
 		}
 
-		await client.Write(1, objects);
-		var result = await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(10, 29));
+		await client.Write(1, objects, TestContext.CancellationToken);
+		var result = await client.Read(
+			ModbusObjectType.Coil, 1, new ModbusRange(10, 29), TestContext.CancellationToken);
 
 		for (int address = 10; address < 30; address++)
 		{
@@ -116,8 +117,8 @@ public class ModbusTcpTests
 		}
 
 		var range = new ModbusRange(0, 299);
-		var registers = await client.Read(ModbusObjectType.InputRegister, 1, range);
-		await client.Write(1, coils);
+		var registers = await client.Read(ModbusObjectType.InputRegister, 1, range, TestContext.CancellationToken);
+		await client.Write(1, coils, TestContext.CancellationToken);
 
 		Assert.AreEqual(300, registers.Count);
 		Assert.AreEqual((ushort)299, registers.GetUInt16(299));
@@ -135,7 +136,7 @@ public class ModbusTcpTests
 		using var client = CreateClient();
 		handler.HoldingRegisters[0] = 1;
 
-		await client.Read(ModbusObjectType.HoldingRegister, 17, new ModbusRange(0));
+		await client.Read(ModbusObjectType.HoldingRegister, 17, new ModbusRange(0), TestContext.CancellationToken);
 
 		Assert.AreEqual((byte)17, handler.LastDeviceId);
 	}
@@ -149,7 +150,7 @@ public class ModbusTcpTests
 		using var client = CreateClient();
 
 		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 
 		Assert.AreEqual(ModbusError.IllegalDataAddress, ex.Code);
 	}
@@ -170,8 +171,11 @@ public class ModbusTcpTests
 		var stream = tcpClient.GetStream();
 
 		await stream.WriteAsync(
-			(byte[])[.. MakeFrame(0x1234, [1, 4, 0x00, 0x05, 0x00, 0x01]),
-				.. MakeFrame(0x1235, [1, 4, 0x00, 0x06, 0x00, 0x01])]);
+			(byte[])[
+				.. MakeFrame(0x1234, [1, 4, 0x00, 0x05, 0x00, 0x01]),
+				.. MakeFrame(0x1235, [1, 4, 0x00, 0x06, 0x00, 0x01])
+			],
+			TestContext.CancellationToken);
 		byte[] responses = await ReadExactly(stream, 2 * 11);
 
 		byte[] expected =
@@ -194,8 +198,8 @@ public class ModbusTcpTests
 
 		byte[] otherProtocolFrame =
 			[0x00, 0x01, 0x00, 0x01, 0x00, 0x06, 1, 4, 0x00, 0x05, 0x00, 0x01];
-		await stream.WriteAsync(otherProtocolFrame);
-		await stream.WriteAsync(MakeFrame(0x0002, [1, 4, 0x00, 0x05, 0x00, 0x01]));
+		await stream.WriteAsync(otherProtocolFrame, TestContext.CancellationToken);
+		await stream.WriteAsync(MakeFrame(0x0002, [1, 4, 0x00, 0x05, 0x00, 0x01]), TestContext.CancellationToken);
 		byte[] response = await ReadExactly(stream, 11);
 
 		Assert.AreEqual((byte)0x02, response[1]);
@@ -210,7 +214,7 @@ public class ModbusTcpTests
 		using var tcpClient = await ConnectRaw();
 		var stream = tcpClient.GetStream();
 
-		await stream.WriteAsync((byte[])[0x00, 0x01, 0x00, 0x00, 0x01, 0x00]);
+		await stream.WriteAsync((byte[])[0x00, 0x01, 0x00, 0x00, 0x01, 0x00], TestContext.CancellationToken);
 
 		await AssertClosed(stream);
 	}
@@ -225,7 +229,7 @@ public class ModbusTcpTests
 		using var tcpClient = await ConnectRaw();
 		var stream = tcpClient.GetStream();
 
-		await stream.WriteAsync((byte[])[0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 1]);
+		await stream.WriteAsync((byte[])[0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 1], TestContext.CancellationToken);
 
 		await AssertClosed(stream);
 	}
@@ -240,7 +244,7 @@ public class ModbusTcpTests
 		using var tcpClient = await ConnectRaw();
 		var stream = tcpClient.GetStream();
 
-		await stream.WriteAsync(MakeFrame(0x0001, [1, 4, 0x00, 0x00, 0x00, 0x01]));
+		await stream.WriteAsync(MakeFrame(0x0001, [1, 4, 0x00, 0x00, 0x00, 0x01]), TestContext.CancellationToken);
 
 		await AssertClosed(stream);
 	}
@@ -254,11 +258,11 @@ public class ModbusTcpTests
 		handler.InputRegisters[0] = 0;
 		using var tcpClient = await ConnectRaw();
 		var stream = tcpClient.GetStream();
-		await stream.WriteAsync(MakeFrame(0x0001, [1, 4, 0x00, 0x00, 0x00, 0x01]));
+		await stream.WriteAsync(MakeFrame(0x0001, [1, 4, 0x00, 0x00, 0x00, 0x01]), TestContext.CancellationToken);
 		await ReadExactly(stream, 11);
 		using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
 
-		await listener.StopAsync(cts.Token).WaitAsync(networkTimeout);
+		await listener.StopAsync(cts.Token).WaitAsync(networkTimeout, TestContext.CancellationToken);
 
 		await AssertClosed(stream);
 		Assert.IsNull(listener.LocalEndPoint);
@@ -298,7 +302,8 @@ public class ModbusTcpTests
 	private async Task<TcpClient> ConnectRaw()
 	{
 		var tcpClient = new TcpClient(AddressFamily.InterNetworkV6);
-		await tcpClient.ConnectAsync(IPAddress.IPv6Loopback, listener.LocalEndPoint!.Port);
+		await tcpClient.ConnectAsync(
+			IPAddress.IPv6Loopback, listener.LocalEndPoint!.Port, TestContext.CancellationToken);
 		return tcpClient;
 	}
 
@@ -366,6 +371,8 @@ public class ModbusTcpTests
 			return Task.FromResult(-1);
 		}
 	}
+
+	public TestContext TestContext { get; set; }
 
 	#endregion Private classes
 }

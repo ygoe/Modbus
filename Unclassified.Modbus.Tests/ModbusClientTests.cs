@@ -21,7 +21,7 @@ public class ModbusClientTests
 
 		var range = new ModbusRange(0x0102, 0x0103);
 
-		var objects = await client.Read(ModbusObjectType.HoldingRegister, 1, range);
+		var objects = await client.Read(ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
 
 		byte[] expectedRequest = [1, 3, 0x01, 0x02, 0x00, 0x02];
 		CollectionAssert.AreEqual(expectedRequest, connection.Requests.Single());
@@ -38,12 +38,12 @@ public class ModbusClientTests
 		var connection = new FakeConnection(_ => [1, 1, 2, 0x05, 0x02]);
 		using var client = CreateClient(connection);
 
-		var objects = await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(0, 9));
+		var objects = await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(0, 9), TestContext.CancellationToken);
 
 		byte[] expectedRequest = [1, 1, 0x00, 0x00, 0x00, 10];
 		CollectionAssert.AreEqual(expectedRequest, connection.Requests.Single());
 		Assert.AreEqual(10, objects.Count);
-		bool[] states = Enumerable.Range(0, 10).Select(objects.GetState).ToArray();
+		bool[] states = [.. Enumerable.Range(0, 10).Select(objects.GetState)];
 		CollectionAssert.AreEqual(
 			new[] { true, false, true, false, false, false, false, false, false, true },
 			states);
@@ -58,7 +58,8 @@ public class ModbusClientTests
 		var connection = new FakeConnection(request => MakeRegisterReadResponse(request));
 		using var client = CreateClient(connection);
 
-		var objects = await client.Read(ModbusObjectType.InputRegister, 1, new ModbusRange(0, 199));
+		var objects = await client.Read(
+			ModbusObjectType.InputRegister, 1, new ModbusRange(0, 199), TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new[] { (0, 125), (125, 75) }, GetStartAndCounts(connection));
 		Assert.AreEqual(200, objects.Count);
@@ -74,7 +75,7 @@ public class ModbusClientTests
 		var connection = new FakeConnection(request => MakeRegisterReadResponse(request));
 		using var client = CreateClient(connection, maxRequestLength: 10);
 
-		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 24));
+		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 24), TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(
 			new[] { (0, 10), (10, 10), (20, 5) },
@@ -92,7 +93,7 @@ public class ModbusClientTests
 
 		ModbusRange[] ranges = [new(0, 1), new(5, 6)];
 
-		await client.Read(ModbusObjectType.HoldingRegister, 1, ranges);
+		await client.Read(ModbusObjectType.HoldingRegister, 1, ranges, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new[] { (0, 7) }, GetStartAndCounts(connection));
 	}
@@ -108,7 +109,8 @@ public class ModbusClientTests
 			request => MakeRegisterReadResponse(request, maxCount: 4));
 		using var client = CreateClient(connection);
 
-		var objects = await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 9));
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 9), TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new[] { (0, 10), (4, 6), (8, 2) }, GetStartAndCounts(connection));
 		Assert.AreEqual(10, objects.Count);
@@ -128,7 +130,8 @@ public class ModbusClientTests
 				MakeRegisterReadResponse(request));
 		using var client = CreateClient(connection, retryCount: 1);
 
-		var objects = await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 1));
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 1), TestContext.CancellationToken);
 
 		Assert.HasCount(2, connection.Requests);
 		Assert.AreEqual(2, objects.Count);
@@ -144,7 +147,7 @@ public class ModbusClientTests
 		using var client = CreateClient(connection, retryCount: 1);
 
 		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 
 		Assert.AreEqual(ModbusError.ServerDeviceBusy, ex.Code);
 		Assert.HasCount(2, connection.Requests);
@@ -160,7 +163,7 @@ public class ModbusClientTests
 		using var client = CreateClient(connection, retryCount: 3);
 
 		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 
 		Assert.AreEqual(ModbusError.IllegalDataAddress, ex.Code);
 		Assert.HasCount(1, connection.Requests);
@@ -176,7 +179,7 @@ public class ModbusClientTests
 		using var client = CreateClient(connection, retryCount: 2);
 
 		await Assert.ThrowsExactlyAsync<IOException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 
 		Assert.HasCount(3, connection.Requests);
 	}
@@ -192,7 +195,7 @@ public class ModbusClientTests
 		using var client = CreateClient(connection);
 
 		await Assert.ThrowsExactlyAsync<ModbusException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 
 		Assert.IsFalse(connection.IsOpen);
 	}
@@ -206,8 +209,8 @@ public class ModbusClientTests
 		var connection = new FakeConnection(request => MakeRegisterReadResponse(request));
 		using var client = CreateClient(connection, idleTimeout: TimeSpan.Zero);
 
-		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0));
-		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0));
+		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken);
+		await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken);
 
 		Assert.AreEqual(2, connection.OpenCount);
 		Assert.IsFalse(connection.IsOpen);
@@ -226,7 +229,7 @@ public class ModbusClientTests
 		using var client = CreateClient(connection, idleTimeout: TimeSpan.Zero);
 
 		await Assert.ThrowsExactlyAsync<IOException>(
-			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0)));
+			() => client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0), TestContext.CancellationToken));
 	}
 
 	/// <summary>
@@ -242,7 +245,7 @@ public class ModbusClientTests
 		client.SendingRequest += (sender, args) => requestArgs = args;
 		client.ResponseReceived += (sender, args) => responseArgs = args;
 
-		await client.Read(ModbusObjectType.HoldingRegister, 5, new ModbusRange(10, 11));
+		await client.Read(ModbusObjectType.HoldingRegister, 5, new ModbusRange(10, 11), TestContext.CancellationToken);
 
 		Assert.IsNotNull(requestArgs);
 		Assert.AreEqual((byte)5, requestArgs.DeviceId);
@@ -265,7 +268,7 @@ public class ModbusClientTests
 		ModbusClient.ResponseEventArgs? responseArgs = null;
 		client.ResponseReceived += (sender, args) => responseArgs = args;
 
-		await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(0, 9));
+		await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(0, 9), TestContext.CancellationToken);
 
 		Assert.IsNotNull(responseArgs);
 		CollectionAssert.AreEqual(
@@ -288,7 +291,7 @@ public class ModbusClientTests
 		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
 		objects.SetUInt16(0x10, 0xbeef);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		byte[] expectedRequest = [1, 6, 0x00, 0x10, 0xbe, 0xef];
 		CollectionAssert.AreEqual(expectedRequest, connection.Requests.Single());
@@ -305,7 +308,7 @@ public class ModbusClientTests
 		var objects = new ModbusCollection(ModbusObjectType.Coil);
 		objects.SetState(3, true);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		byte[] expectedRequest = [1, 5, 0x00, 0x03, 0xff, 0x00];
 		CollectionAssert.AreEqual(expectedRequest, connection.Requests.Single());
@@ -322,7 +325,7 @@ public class ModbusClientTests
 		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
 		objects.SetUInt32(0x20, 0x12345678);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(
 			new byte[] { 1, 16, 0x00, 0x20, 0x00, 0x02, 4, 0x12, 0x34, 0x56, 0x78 },
@@ -344,7 +347,7 @@ public class ModbusClientTests
 			objects.SetState(address, address is 0 or 2 or 9);
 		}
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(
 			new byte[] { 1, 15, 0x00, 0x00, 0x00, 10, 2, 0x05, 0x02 },
@@ -367,7 +370,7 @@ public class ModbusClientTests
 			objects.SetState(address, address is 0 or 2 or 9);
 		}
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		Assert.IsNotNull(requestArgs);
 		CollectionAssert.AreEqual(
@@ -389,7 +392,7 @@ public class ModbusClientTests
 			objects.SetUInt16(address, (ushort)address);
 		}
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new[] { (0, 123), (123, 7) }, GetStartAndCounts(connection));
 	}
@@ -405,7 +408,8 @@ public class ModbusClientTests
 		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
 		objects.SetUInt16(0x10, 0xbeef);
 
-		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(() => client.Write(1, objects));
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Write(1, objects, TestContext.CancellationToken));
 
 		Assert.AreEqual(ModbusError.WriteMismatch, ex.Code);
 	}
@@ -423,9 +427,9 @@ public class ModbusClientTests
 		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
 		objects.SetUInt16(0x10, 0xbeef);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
-		byte[] functionCodes = connection.Requests.Select(r => r[1]).ToArray();
+		byte[] functionCodes = [.. connection.Requests.Select(r => r[1])];
 		CollectionAssert.AreEqual(new byte[] { 6, 16 }, functionCodes);
 		Assert.IsTrue(client.AlwaysWriteMultiple);
 	}
@@ -445,7 +449,7 @@ public class ModbusClientTests
 		objects.SetUInt16(0x11, 0x2222);
 		objects.SetUInt16(0x12, 0x3333);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		byte[][] expectedSingleRequests =
 		[
@@ -482,7 +486,7 @@ public class ModbusClientTests
 		objects.SetUInt32(0x10, 0x11112222);
 		objects.SetUInt32(0x12, 0x33334444);
 
-		await client.Write(1, objects);
+		await client.Write(1, objects, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new[] { (0x10, 4), (0x12, 2) }, GetStartAndCounts(connection));
 		byte[] expectedRequest = [1, 16, 0x00, 0x12, 0x00, 0x02, 4, 0x33, 0x33, 0x44, 0x44];
@@ -513,7 +517,7 @@ public class ModbusClientTests
 		var connection = new FakeConnection(_ => response);
 		using var client = CreateClient(connection);
 
-		var values = await client.ReadDeviceIdentification(1);
+		var values = await client.ReadDeviceIdentification(1, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new byte[] { 1, 43, 14, 1, 0 }, connection.Requests.Single());
 		Assert.AreEqual("ABC", values[ModbusDeviceIdentificationObject.VendorName]);
@@ -579,7 +583,9 @@ public class ModbusClientTests
 	/// Returns the start addresses and counts of all requests sent through the connection.
 	/// </summary>
 	private static (int StartAddress, int Count)[] GetStartAndCounts(FakeConnection connection) =>
-		connection.Requests.Select(GetStartAndCount).ToArray();
+		[.. connection.Requests.Select(GetStartAndCount)];
+
+	public TestContext TestContext { get; set; }
 
 	#endregion Helper methods
 }

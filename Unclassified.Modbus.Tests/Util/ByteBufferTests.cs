@@ -105,12 +105,14 @@ public class ByteBufferTests
 	{
 		var buffer = new ByteBuffer();
 		buffer.Enqueue([1]);
-		var task = buffer.DequeueAsync(3);
+		var task = buffer.DequeueAsync(3, TestContext.CancellationToken);
 		Assert.IsFalse(task.IsCompleted);
 
 		buffer.Enqueue([2, 3, 4]);
 
-		CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, await task.WaitAsync(completionTimeout));
+		CollectionAssert.AreEqual(
+			new byte[] { 1, 2, 3 },
+			await task.WaitAsync(completionTimeout, TestContext.CancellationToken));
 		Assert.AreEqual(1, buffer.Count);
 	}
 
@@ -122,12 +124,12 @@ public class ByteBufferTests
 	{
 		var buffer = new ByteBuffer();
 		byte[] data = new byte[5];
-		var task = buffer.DequeueAsync(data, 1, 3);
+		var task = buffer.DequeueAsync(data, 1, 3, TestContext.CancellationToken);
 		Assert.IsFalse(task.IsCompleted);
 
 		buffer.Enqueue([1, 2, 3, 4]);
 
-		await task.WaitAsync(completionTimeout);
+		await task.WaitAsync(completionTimeout, TestContext.CancellationToken);
 		CollectionAssert.AreEqual(new byte[] { 0, 1, 2, 3, 0 }, data);
 		Assert.AreEqual(1, buffer.Count);
 	}
@@ -143,7 +145,8 @@ public class ByteBufferTests
 		buffer.Enqueue([1, 2, 3, 4, 5, 6]);
 		byte[] data = new byte[2];
 
-		await buffer.DequeueAsync(data, 0, 2).WaitAsync(completionTimeout);
+		await buffer.DequeueAsync(data, 0, 2, TestContext.CancellationToken)
+			.WaitAsync(completionTimeout, TestContext.CancellationToken);
 
 		CollectionAssert.AreEqual(new byte[] { 1, 2 }, data);
 		Assert.AreEqual(4, buffer.Count);
@@ -162,7 +165,7 @@ public class ByteBufferTests
 		cts.Cancel();
 
 		await Assert.ThrowsAsync<OperationCanceledException>(
-			() => task.WaitAsync(completionTimeout));
+			() => task.WaitAsync(completionTimeout, TestContext.CancellationToken));
 	}
 
 	/// <summary>
@@ -172,14 +175,16 @@ public class ByteBufferTests
 	public async Task WaitAsync_CompletesOnEnqueue()
 	{
 		var buffer = new ByteBuffer();
-		var task = buffer.WaitAsync();
+		var task = buffer.WaitAsync(TestContext.CancellationToken);
 		Assert.IsFalse(task.IsCompleted);
 
 		buffer.Enqueue([1]);
 
-		await task.WaitAsync(completionTimeout);
+		await task.WaitAsync(completionTimeout, TestContext.CancellationToken);
 		Assert.AreEqual(1, buffer.Count);
 	}
+
+	public TestContext TestContext { get; set; }
 
 	#endregion Asynchronous methods
 }
