@@ -194,7 +194,11 @@ public class ModbusClient : IDisposable
 	/// <exception cref="ModbusException">When the Modbus operation failed because of a negative
 	///   response or protocol violation. The reason will be indicated in the exception's
 	///   <see cref="ModbusException.Code"/> property.</exception>
-	public Task<ModbusCollection> Read(ModbusObjectType objectType, int deviceId, ModbusRange range, CancellationToken cancellationToken = default) =>
+	public Task<ModbusCollection> Read(
+		ModbusObjectType objectType,
+		int deviceId,
+		ModbusRange range,
+		CancellationToken cancellationToken = default) =>
 		Read(objectType, deviceId, [range], cancellationToken);
 
 	/// <summary>
@@ -211,7 +215,11 @@ public class ModbusClient : IDisposable
 	/// <exception cref="ModbusException">When the Modbus operation failed because of a negative
 	///   response or protocol violation. The reason will be indicated in the exception's
 	///   <see cref="ModbusException.Code"/> property.</exception>
-	public async Task<ModbusCollection> Read(ModbusObjectType objectType, int deviceId, IEnumerable<ModbusRange> ranges, CancellationToken cancellationToken = default)
+	public async Task<ModbusCollection> Read(
+		ModbusObjectType objectType,
+		int deviceId,
+		IEnumerable<ModbusRange> ranges,
+		CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(IsDisposed, this);
 
@@ -230,12 +238,14 @@ public class ModbusClient : IDisposable
 			{
 				requestEventArgs = SendingRequest != null ? new RequestEventArgs() : null;
 				responseEventArgs = ResponseReceived != null ? new ResponseEventArgs() : null;
-				var requestBody = MakeReadRequest((byte)deviceId, objectType, currentRange.StartAddress, currentRange.Length);
+				var requestBody = MakeReadRequest(
+					(byte)deviceId, objectType, currentRange.StartAddress, currentRange.Length);
 				var responseBody = await SendRequest(requestBody, cancellationToken).NoSync();
 				ModbusCollection objects;
 				try
 				{
-					objects = DecodeReadResponse(responseBody, objectType, currentRange.StartAddress, currentRange.Length);
+					objects = DecodeReadResponse(
+						responseBody, objectType, currentRange.StartAddress, currentRange.Length);
 					if (responseEventArgs != null)
 						ResponseReceived?.Invoke(this, responseEventArgs);
 				}
@@ -261,7 +271,10 @@ public class ModbusClient : IDisposable
 					break;
 				// VIOLATION: Repeat for remaining objects not included in the response
 				if (logger?.IsEnabled(LogLevel.Debug) == true)
-					logger?.LogDebug("Server has returned less objects ({Count}) than requested ({Length}), repeating for remaining...", objects.Count, currentRange.Length);
+					logger?.LogDebug(
+						"Server has returned less objects ({Count}) than requested ({Length}), repeating for remaining...",
+						objects.Count,
+						currentRange.Length);
 				currentRange = currentRange.Subrange(objects.Count);
 				retryCount = RetryCount;
 			}
@@ -323,7 +336,11 @@ public class ModbusClient : IDisposable
 					if (responseEventArgs != null)
 						ResponseReceived?.Invoke(this, responseEventArgs);
 				}
-				catch (ModbusException ex) when (ex.Code == ModbusError.IllegalFunction && !writeSingle && !AlwaysWriteSingle && !AlwaysWriteMultiple)
+				catch (ModbusException ex) when (
+					ex.Code == ModbusError.IllegalFunction &&
+					!writeSingle &&
+					!AlwaysWriteSingle &&
+					!AlwaysWriteMultiple)
 				{
 					logger?.LogDebug("Server does not support writing multiple objects, switching to single write mode.");
 					if (responseEventArgs != null)
@@ -332,7 +349,11 @@ public class ModbusClient : IDisposable
 					retryCount = RetryCount;
 					continue;
 				}
-				catch (ModbusException ex) when (ex.Code == ModbusError.IllegalFunction && writeSingle && !AlwaysWriteSingle && !AlwaysWriteMultiple)
+				catch (ModbusException ex) when (
+					ex.Code == ModbusError.IllegalFunction &&
+					writeSingle &&
+					!AlwaysWriteSingle &&
+					!AlwaysWriteMultiple)
 				{
 					logger?.LogDebug("Server does not support writing single objects, switching to multiple write mode.");
 					if (responseEventArgs != null)
@@ -374,7 +395,9 @@ public class ModbusClient : IDisposable
 	/// <param name="cancellationToken">A cancellation token used to propagate notification that
 	///   this operation should be canceled.</param>
 	/// <returns>A dictionary containing the device identification objects and their string values.</returns>
-	public async Task<IDictionary<ModbusDeviceIdentificationObject, string>> ReadDeviceIdentification(int deviceId, CancellationToken cancellationToken = default)
+	public async Task<IDictionary<ModbusDeviceIdentificationObject, string>> ReadDeviceIdentification(
+		int deviceId,
+		CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(IsDisposed, this);
 
@@ -392,14 +415,18 @@ public class ModbusClient : IDisposable
 				var responseBody = await SendRequest(requestBody, cancellationToken).NoSync();
 				try
 				{
-					DecodeReadIdResponse(responseBody, results, out byte conformityLevel, out bool moreFollows, out var newNextObjectId);
+					DecodeReadIdResponse(
+						responseBody, results, out byte conformityLevel, out bool moreFollows, out var newNextObjectId);
 					if (responseEventArgs != null)
 						ResponseReceived?.Invoke(this, responseEventArgs);
 					byte newMaxCategory = (byte)(conformityLevel & 0x7f);
 					if (newMaxCategory != maxCategory)
 					{
 						if (logger?.IsEnabled(LogLevel.Trace) == true)
-							logger?.LogTrace("Device indicated support of data category {NewMaxCategory}, was {MaxCategory}.", newMaxCategory, maxCategory);
+							logger?.LogTrace(
+								"Device indicated support of data category {NewMaxCategory}, was {MaxCategory}.",
+								newMaxCategory,
+								maxCategory);
 						maxCategory = newMaxCategory;
 					}
 					if (!moreFollows)
@@ -424,7 +451,10 @@ public class ModbusClient : IDisposable
 					await Task.Delay(RandomizeTimeSpan(BusyRetryDelay), cancellationToken).NoSync();
 					continue;
 				}
-				catch (ModbusException ex) when (ex.Code == ModbusError.IllegalDataAddress && (category == 2 || category == 3) && nextObjectId == 0)
+				catch (ModbusException ex) when (
+					ex.Code == ModbusError.IllegalDataAddress &&
+					(category == 2 || category == 3) &&
+					nextObjectId == 0)
 				{
 					if (responseEventArgs != null)
 						ResponseReceived?.Invoke(this, responseEventArgs);
@@ -487,7 +517,11 @@ public class ModbusClient : IDisposable
 
 	#region Read request/response coding
 
-	private ReadOnlyMemory<byte> MakeReadRequest(byte deviceId, ModbusObjectType objectType, ushort startAddress, ushort count)
+	private ReadOnlyMemory<byte> MakeReadRequest(
+		byte deviceId,
+		ModbusObjectType objectType,
+		ushort startAddress,
+		ushort count)
 	{
 		byte[] bytes = new byte[6];
 		bytes[0] = deviceId;
@@ -514,10 +548,16 @@ public class ModbusClient : IDisposable
 		return bytes;
 	}
 
-	private ModbusCollection DecodeReadResponse(ReadOnlyMemory<byte> responseBody, ModbusObjectType objectType, ushort startAddress, ushort count)
+	private ModbusCollection DecodeReadResponse(
+		ReadOnlyMemory<byte> responseBody,
+		ModbusObjectType objectType,
+		ushort startAddress,
+		ushort count)
 	{
 		if (responseBody.Length < 3)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		byte functionCode = responseBody.Span[1];
 		if (responseEventArgs != null)
 			responseEventArgs.FunctionCode = ((FunctionCode)functionCode).ToString();
@@ -530,7 +570,9 @@ public class ModbusClient : IDisposable
 		}
 		byte dataLength = responseBody.Span[2];
 		if (responseBody.Length < 3 + dataLength)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response data ends unexpectedly after {responseBody.Length - 3} instead of {dataLength} bytes.");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response data ends unexpectedly after {responseBody.Length - 3} instead of {dataLength} bytes.");
 
 		var objects = new ModbusCollection(objectType);
 		if (objectType == ModbusObjectType.Coil || objectType == ModbusObjectType.DiscreteInput)
@@ -558,7 +600,11 @@ public class ModbusClient : IDisposable
 				ushort value = (ushort)(responseBody.Span[3 + addressOffset * 2] << 8 | responseBody.Span[3 + addressOffset * 2 + 1]);
 				objects.SetUInt16(startAddress + addressOffset, value);
 				if (logger?.IsEnabled(LogLevel.Trace) == true)
-					logger?.LogTrace("Register {Address}: {Value} ({HexValue})", startAddress + addressOffset, value, $"0x{value:x4}");
+					logger?.LogTrace(
+						"Register {Address}: {Value} ({HexValue})",
+						startAddress + addressOffset,
+						value,
+						$"0x{value:x4}");
 				if (responseEventArgs != null)
 					responseEventArgs.DataArray![addressOffset] = value;
 			}
@@ -611,10 +657,15 @@ public class ModbusClient : IDisposable
 		return bytes;
 	}
 
-	private void DecodeSingleWriteResponse(ReadOnlyMemory<byte> responseBody, ushort startAddress, ModbusCollection objects)
+	private void DecodeSingleWriteResponse(
+		ReadOnlyMemory<byte> responseBody,
+		ushort startAddress,
+		ModbusCollection objects)
 	{
 		if (responseBody.Length < 3)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		byte functionCode = responseBody.Span[1];
 		if (responseEventArgs != null)
 			responseEventArgs.FunctionCode = ((FunctionCode)functionCode).ToString();
@@ -626,14 +677,18 @@ public class ModbusClient : IDisposable
 			throw new ModbusException(errorCode);
 		}
 		if (responseBody.Length < 6)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		if (responseBody.Length > 6 && logger?.IsEnabled(LogLevel.Trace) == true)
 			logger?.LogTrace("Response is too long: {Length} bytes, expected 6", responseBody.Length);
 		ushort rcvdStartAddress = (ushort)(responseBody.Span[2] << 8 | responseBody.Span[3]);
 		if (responseEventArgs != null)
 			responseEventArgs.StartAddress = rcvdStartAddress;
 		if (rcvdStartAddress != startAddress)
-			throw new ModbusException(ModbusError.AddressMismatch, $"Response has different start address confirmed ({rcvdStartAddress}) than requested ({startAddress}).");
+			throw new ModbusException(
+				ModbusError.AddressMismatch,
+				$"Response has different start address confirmed ({rcvdStartAddress}) than requested ({startAddress}).");
 
 		if (objects.ObjectType == ModbusObjectType.Coil)
 		{
@@ -642,7 +697,9 @@ public class ModbusClient : IDisposable
 			if (responseEventArgs != null)
 				responseEventArgs.Data = rcvdValue;
 			if ((rcvdValue != 0) != state)
-				throw new ModbusException(ModbusError.WriteMismatch, $"Response has different state confirmed ({rcvdValue != 0}) than requested ({state}).");
+				throw new ModbusException(
+					ModbusError.WriteMismatch,
+					$"Response has different state confirmed ({rcvdValue != 0}) than requested ({state}).");
 		}
 		else if (objects.ObjectType == ModbusObjectType.HoldingRegister)
 		{
@@ -651,7 +708,9 @@ public class ModbusClient : IDisposable
 			if (responseEventArgs != null)
 				responseEventArgs.Data = rcvdValue;
 			if (rcvdValue != value)
-				throw new ModbusException(ModbusError.WriteMismatch, $"Response has different value confirmed ({rcvdValue}) than requested ({value}).");
+				throw new ModbusException(
+					ModbusError.WriteMismatch,
+					$"Response has different value confirmed ({rcvdValue}) than requested ({value}).");
 		}
 		else
 		{
@@ -659,7 +718,11 @@ public class ModbusClient : IDisposable
 		}
 	}
 
-	private ReadOnlyMemory<byte> MakeMultipleWriteRequest(byte deviceId, ushort startAddress, ushort count, ModbusCollection objects)
+	private ReadOnlyMemory<byte> MakeMultipleWriteRequest(
+		byte deviceId,
+		ushort startAddress,
+		ushort count,
+		ModbusCollection objects)
 	{
 		byte dataLength = objects.ObjectType switch
 		{
@@ -687,7 +750,8 @@ public class ModbusClient : IDisposable
 		int index = 7;
 		if (objects.ObjectType == ModbusObjectType.Coil)
 		{
-			// State bits are written in address order from least to most significant bit, one byte after the other
+			// State bits are written in address order from least to most significant bit, one byte
+			// after the other
 			if (requestEventArgs != null)
 				requestEventArgs.DataArray = new ushort[count];
 			for (int i = 0; i < count; i += 8)
@@ -732,7 +796,9 @@ public class ModbusClient : IDisposable
 	private int DecodeMultipleWriteResponse(ReadOnlyMemory<byte> responseBody, ushort startAddress, ushort count)
 	{
 		if (responseBody.Length < 3)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		byte functionCode = responseBody.Span[1];
 		if (responseEventArgs != null)
 			responseEventArgs.FunctionCode = ((FunctionCode)functionCode).ToString();
@@ -744,19 +810,25 @@ public class ModbusClient : IDisposable
 			throw new ModbusException(errorCode);
 		}
 		if (responseBody.Length < 6)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		if (responseBody.Length > 6 && logger?.IsEnabled(LogLevel.Trace) == true)
 			logger?.LogTrace("Response is too long: {Length} bytes, expected 6", responseBody.Length);
 		ushort rcvdStartAddress = (ushort)(responseBody.Span[2] << 8 | responseBody.Span[3]);
 		if (responseEventArgs != null)
 			responseEventArgs.StartAddress = rcvdStartAddress;
 		if (rcvdStartAddress != startAddress)
-			throw new ModbusException(ModbusError.AddressMismatch, $"Response has different start address confirmed ({rcvdStartAddress}) than requested ({startAddress}).");
+			throw new ModbusException(
+				ModbusError.AddressMismatch,
+				$"Response has different start address confirmed ({rcvdStartAddress}) than requested ({startAddress}).");
 		ushort rcvdCount = (ushort)(responseBody.Span[4] << 8 | responseBody.Span[5]);
 		if (responseEventArgs != null)
 			responseEventArgs.Count = rcvdCount;
 		if (rcvdCount == 0)
-			throw new ModbusException(ModbusError.WriteMismatch, $"Response confirms zero written registers (requested {count}).");
+			throw new ModbusException(
+				ModbusError.WriteMismatch,
+				$"Response confirms zero written registers (requested {count}).");
 		return rcvdCount;
 	}
 
@@ -764,7 +836,10 @@ public class ModbusClient : IDisposable
 
 	#region Read device identification coding
 
-	private ReadOnlyMemory<byte> MakeReadIdRequest(byte deviceId, byte category, ModbusDeviceIdentificationObject startObjectId)
+	private ReadOnlyMemory<byte> MakeReadIdRequest(
+		byte deviceId,
+		byte category,
+		ModbusDeviceIdentificationObject startObjectId)
 	{
 		byte[] bytes = new byte[5];
 		bytes[0] = deviceId;
@@ -791,7 +866,9 @@ public class ModbusClient : IDisposable
 		out ModbusDeviceIdentificationObject nextObjectId)
 	{
 		if (responseBody.Length < 3)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		byte functionCode = responseBody.Span[1];
 		if (responseEventArgs != null)
 			responseEventArgs.FunctionCode = ((FunctionCode)functionCode).ToString();
@@ -813,7 +890,9 @@ public class ModbusClient : IDisposable
 			throw new ModbusException(errorCode);
 		}
 		if (responseBody.Length < 8)
-			throw new ModbusException(ModbusError.IncompleteResponse, $"Response is too short: {responseBody.Length} bytes starting at device ID");
+			throw new ModbusException(
+				ModbusError.IncompleteResponse,
+				$"Response is too short: {responseBody.Length} bytes starting at device ID");
 		conformityLevel = responseBody.Span[4];
 		moreFollows = responseBody.Span[5] != 0;
 		nextObjectId = (ModbusDeviceIdentificationObject)responseBody.Span[6];
@@ -827,11 +906,15 @@ public class ModbusClient : IDisposable
 		for (int i = 0; index < responseBody.Length; i++)
 		{
 			if (responseBody.Length < index + 2)
-				throw new ModbusException(ModbusError.IncompleteResponse, $"Response data ends unexpectedly after {responseBody.Length} bytes in the object #{i + 1}.");
+				throw new ModbusException(
+					ModbusError.IncompleteResponse,
+					$"Response data ends unexpectedly after {responseBody.Length} bytes in the object #{i + 1}.");
 			var objectId = (ModbusDeviceIdentificationObject)responseBody.Span[index++];
 			byte length = responseBody.Span[index++];
 			if (responseBody.Length < index + length)
-				throw new ModbusException(ModbusError.IncompleteResponse, $"Response data ends unexpectedly after {responseBody.Length} instead of {index + length} bytes in the object #{i + 1}.");
+				throw new ModbusException(
+					ModbusError.IncompleteResponse,
+					$"Response data ends unexpectedly after {responseBody.Length} instead of {index + length} bytes in the object #{i + 1}.");
 			string value = length > 0 ?
 				Encoding.ASCII.GetString(responseBody.Span[index..(index + length)]) :
 				"";
@@ -856,8 +939,12 @@ public class ModbusClient : IDisposable
 
 	#region Internal request methods
 
-	[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "writeSingle is less commonly used")]
-	private async Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default, bool? writeSingle = null)
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
+		Justification = "writeSingle is less commonly used")]
+	private async Task<ReadOnlyMemory<byte>> SendRequest(
+		ReadOnlyMemory<byte> requestBody,
+		CancellationToken cancellationToken = default,
+		bool? writeSingle = null)
 	{
 		await connectionSemaphore.WaitAsync(cancellationToken).NoSync();
 		try
@@ -868,7 +955,8 @@ public class ModbusClient : IDisposable
 				try
 				{
 					logger?.LogDebug("Sending request...");
-					using var linkedCts = TaskHelper.CreateTimeoutCancellationTokenSource(cancellationToken, ResponseTimeout);
+					using var linkedCts = TaskHelper.CreateTimeoutCancellationTokenSource(
+						cancellationToken, ResponseTimeout);
 					ReadOnlyMemory<byte> responseBody;
 					try
 					{
@@ -899,7 +987,9 @@ public class ModbusClient : IDisposable
 							{
 								// This error suggests that the connection is out of sync somehow.
 								// Close it and start fresh, maybe that helps to recover.
-								logger?.LogWarning("Connection seems out of sync (error code: {ErrorCode}), closing connection to recover.", modbusEx.Code);
+								logger?.LogWarning(
+									"Connection seems out of sync (error code: {ErrorCode}), closing connection to recover.",
+									modbusEx.Code);
 								connection?.Close();
 							}
 						}

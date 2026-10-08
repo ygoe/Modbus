@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 
 namespace Unclassified.Modbus.Util;
 
@@ -17,8 +17,11 @@ internal static class TaskHelper
 	/// A new <see cref="CancellationTokenSource"/> instance that provides a new
 	/// <see cref="CancellationToken"/> to observe. This instance must be disposed by the caller.
 	/// </returns>
-	[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last", Justification = "CancellationToken is enhanced by timeout")]
-	public static CancellationTokenSource CreateTimeoutCancellationTokenSource(CancellationToken cancellationToken, TimeSpan timeout)
+	[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
+		Justification = "CancellationToken is enhanced by timeout")]
+	public static CancellationTokenSource CreateTimeoutCancellationTokenSource(
+		CancellationToken cancellationToken,
+		TimeSpan timeout)
 	{
 		var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 		linkedCts.CancelAfter(timeout);
@@ -37,7 +40,9 @@ internal static class TaskHelper
 	/// <paramref name="cancellationToken"/>, if it was cancelled; otherwise, a
 	/// <see cref="TimeoutException"/> that better indicates that the timeout has expired.
 	/// </returns>
-	public static Exception GetOperationCanceledOrTimeoutException(OperationCanceledException ex, CancellationToken cancellationToken)
+	public static Exception GetOperationCanceledOrTimeoutException(
+		OperationCanceledException ex,
+		CancellationToken cancellationToken)
 	{
 		if (cancellationToken.IsCancellationRequested)
 		{

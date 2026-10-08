@@ -1,4 +1,4 @@
-﻿namespace ModbusClientDemo.Util;
+namespace ModbusClientDemo.Util;
 
 /// <summary>
 /// Represents a first-in, first-out collection of objects with asynchronous and batch access.

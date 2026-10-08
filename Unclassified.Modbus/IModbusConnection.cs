@@ -18,7 +18,9 @@ public interface IModbusConnection
 	/// <param name="cancellationToken">A cancellation token used to propagate notification that
 	///   this operation should be canceled.</param>
 	/// <returns>The bytes of a complete response received from the server.</returns>
-	public Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default);
+	public Task<ReadOnlyMemory<byte>> SendRequest(
+		ReadOnlyMemory<byte> requestBody,
+		CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Closes the connection.

@@ -48,6 +48,7 @@ The solution contains the library `Unclassified.Modbus`, its tests in `Unclassif
 - Never use EN-DASH (U+2013), EM-DASH (U+2014) or MINUS (U+2212) in code comments; find other ways to phrase it, e.g. using colon, semicolon or a new sentence and use a regular hyphen for maths or exceptional cases.
 - Keep lines within 100 chars, counting a tab as 4 columns. Go past that only where a break would hurt readability, and rarely past 120. Many existing method signatures, log and exception messages are longer; don't rewrap lines you are not otherwise changing.
 - Files use CRLF line endings, and `.gitattributes` disables git's line ending normalization, so write new and edited files with CRLF.
+- Files use UTF-8 encoding without BOM.
 
 ## Comment policy
 

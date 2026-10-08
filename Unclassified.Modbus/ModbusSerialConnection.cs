@@ -57,7 +57,9 @@ internal class ModbusSerialConnection : IModbusConnection
 		timeUsPerByte = 1000000 * bitsPerByte / baudRate;
 	}
 
-	public async Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default)
+	public async Task<ReadOnlyMemory<byte>> SendRequest(
+		ReadOnlyMemory<byte> requestBody,
+		CancellationToken cancellationToken = default)
 	{
 		if (serialPort == null)
 			throw new InvalidOperationException("Connection not opened.");
@@ -200,7 +202,10 @@ internal class ModbusSerialConnection : IModbusConnection
 		if (crc != computedCrc)
 		{
 			if (logger?.IsEnabled(LogLevel.Trace) == true)
-				logger?.LogTrace("Data CRC: {Crc}, computed CRC: {ComputedCrc}", $"0x{crc:x4}", $"0x{computedCrc:x4}");
+				logger?.LogTrace(
+					"Data CRC: {Crc}, computed CRC: {ComputedCrc}",
+					$"0x{crc:x4}",
+					$"0x{computedCrc:x4}");
 			throw new ModbusException(ModbusError.CrcMismatch);
 		}
 		return responseBody;

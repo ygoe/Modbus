@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus.Util;
+namespace Unclassified.Modbus.Util;
 
 /// <summary>
 /// Represents a first-in, first-out collection of bytes with asynchronous dequeuing.

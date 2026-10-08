@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -64,7 +64,10 @@ internal class CompactConsoleLogger : ILogger
 	/// <param name="getCurrentConfig">A function that returns the current logger configuration.</param>
 	/// <param name="minLevel">The minimum log level to print to the console. Log entries with a
 	///   level below that will not be printed.</param>
-	public CompactConsoleLogger(string? name, Func<CompactConsoleLoggerConfiguration>? getCurrentConfig = null, LogLevel minLevel = LogLevel.Trace)
+	public CompactConsoleLogger(
+		string? name,
+		Func<CompactConsoleLoggerConfiguration>? getCurrentConfig = null,
+		LogLevel minLevel = LogLevel.Trace)
 	{
 		this.name = name;
 		this.getCurrentConfig = getCurrentConfig;
@@ -86,7 +89,12 @@ internal class CompactConsoleLogger : ILogger
 		return logLevel >= minLevel;
 	}
 
-	public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+	public void Log<TState>(
+		LogLevel logLevel,
+		EventId eventId,
+		TState state,
+		Exception? exception,
+		Func<TState, Exception?, string> formatter)
 	{
 		if (!IsEnabled(logLevel))
 			return;
@@ -396,7 +404,12 @@ internal class CompactConsoleLogger : ILogger
 
 	private class LogEntry
 	{
-		public LogEntry(LogLevel logLevel, string? name, string? text, Exception? exception, IReadOnlyList<KeyValuePair<string, object?>>? properties)
+		public LogEntry(
+			LogLevel logLevel,
+			string? name,
+			string? text,
+			Exception? exception,
+			IReadOnlyList<KeyValuePair<string, object?>>? properties)
 		{
 			LogLevel = logLevel;
 			Name = name;
@@ -481,7 +494,9 @@ public static class CompactConsoleLoggerExtensions
 	/// <param name="builder">The <see cref="ILoggingBuilder"/> to use.</param>
 	/// <param name="configure">A delegate to configure the <see cref="CompactConsoleLogger"/>.</param>
 	/// <returns>The <paramref name="builder"/>.</returns>
-	public static ILoggingBuilder AddCompactConsoleLogger(this ILoggingBuilder builder, Action<CompactConsoleLoggerConfiguration> configure)
+	public static ILoggingBuilder AddCompactConsoleLogger(
+		this ILoggingBuilder builder,
+		Action<CompactConsoleLoggerConfiguration> configure)
 	{
 		builder.AddCompactConsoleLogger();
 		builder.Services.Configure(configure);

@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus.Util;
+namespace Unclassified.Modbus.Util;
 
 internal static class Crc16
 {

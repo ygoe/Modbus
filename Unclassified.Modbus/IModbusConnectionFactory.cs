@@ -14,5 +14,7 @@ public interface IModbusConnectionFactory
 	/// <param name="cancellationToken">A cancellation token used to propagate notification that
 	///   this operation should be canceled.</param>
 	/// <returns>The new connection in the open state.</returns>
-	public Task<IModbusConnection> GetConnection(ILogger? logger = null, CancellationToken cancellationToken = default);
+	public Task<IModbusConnection> GetConnection(
+		ILogger? logger = null,
+		CancellationToken cancellationToken = default);
 }

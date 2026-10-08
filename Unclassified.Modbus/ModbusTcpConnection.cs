@@ -22,7 +22,11 @@ internal class ModbusTcpConnection : IModbusConnection
 
 	public bool IsOpen => tcpClient?.Client.Connected == true;
 
-	internal async Task Connect(string hostName, int port, bool ignoreTransactionIdMismatch, CancellationToken cancellationToken = default)
+	internal async Task Connect(
+		string hostName,
+		int port,
+		bool ignoreTransactionIdMismatch,
+		CancellationToken cancellationToken = default)
 	{
 		if (logger?.IsEnabled(LogLevel.Debug) == true)
 			logger?.LogDebug("Connecting to {HostName}:{Port}...", hostName, port);
@@ -34,7 +38,9 @@ internal class ModbusTcpConnection : IModbusConnection
 		this.ignoreTransactionIdMismatch = ignoreTransactionIdMismatch;
 	}
 
-	public async Task<ReadOnlyMemory<byte>> SendRequest(ReadOnlyMemory<byte> requestBody, CancellationToken cancellationToken = default)
+	public async Task<ReadOnlyMemory<byte>> SendRequest(
+		ReadOnlyMemory<byte> requestBody,
+		CancellationToken cancellationToken = default)
 	{
 		if (tcpClient == null)
 			throw new InvalidOperationException("Connection not opened.");
@@ -106,11 +112,16 @@ internal class ModbusTcpConnection : IModbusConnection
 			if (ignoreTransactionIdMismatch)
 			{
 				if (logger?.IsEnabled(LogLevel.Debug) == true)
-					logger?.LogDebug("Response transaction ID {RcvdTransactionId} does not match request transaction ID {TransactionId}.", rcvdTransactionId, transactionId);
+					logger?.LogDebug(
+						"Response transaction ID {RcvdTransactionId} does not match request transaction ID {TransactionId}.",
+						rcvdTransactionId,
+						transactionId);
 			}
 			else
 			{
-				throw new ModbusException(ModbusError.TransactionIdMismatch, $"Response transaction ID ({rcvdTransactionId}) does not match request ({transactionId}).");
+				throw new ModbusException(
+					ModbusError.TransactionIdMismatch,
+					$"Response transaction ID ({rcvdTransactionId}) does not match request ({transactionId}).");
 			}
 		}
 		int responseLength = response[4] << 8 | response[5];

@@ -1,4 +1,4 @@
-﻿using System.IO.Ports;
+using System.IO.Ports;
 using System.Runtime.InteropServices;
 
 namespace Unclassified.Modbus.Util;
@@ -59,7 +59,10 @@ internal static class SerialPortExtensions
 	/// parameter, have been read. It throws an exception before that when the timeout has elapsed
 	/// or the <paramref name="cancellationToken"/> was triggered.
 	/// </remarks>
-	public static async Task<int> ReadAsync(this SerialPort serialPort, Memory<byte> buffer, CancellationToken cancellationToken = default)
+	public static async Task<int> ReadAsync(
+		this SerialPort serialPort,
+		Memory<byte> buffer,
+		CancellationToken cancellationToken = default)
 	{
 		// SerialPort.ReadTimeout seems to be ignored, use a custom implementation instead
 		using (var cts = new CancellationTokenSource(serialPort.ReadTimeout))
@@ -121,7 +124,10 @@ internal static class SerialPortExtensions
 	/// was actually sent in that case.
 	/// </para>
 	/// </remarks>
-	public static async Task WriteAsync(this SerialPort serialPort, ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+	public static async Task WriteAsync(
+		this SerialPort serialPort,
+		ReadOnlyMemory<byte> buffer,
+		CancellationToken cancellationToken = default)
 	{
 		// SerialPort.WriteTimeout seems to be ignored, use a custom implementation instead
 		using (var cts = new CancellationTokenSource(serialPort.WriteTimeout))

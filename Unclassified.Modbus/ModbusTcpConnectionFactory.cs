@@ -13,7 +13,8 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	/// </summary>
 	/// <param name="hostName">The name of the network host to connect to.</param>
 	/// <param name="port">The TCP port number to connect to.</param>
-	/// <param name="ignoreTransactionIdMismatch">Ignore non-matching response transaction IDs which can lead to mixing up the read data in unstable network conditions.</param>
+	/// <param name="ignoreTransactionIdMismatch">Ignore non-matching response transaction IDs which
+	///   can lead to mixing up the read data in unstable network conditions.</param>
 	public ModbusTcpConnectionFactory(string hostName, int port, bool ignoreTransactionIdMismatch)
 	{
 		HostName = hostName;
@@ -37,7 +38,9 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	public bool IgnoreTransactionIdMismatch { get; }
 
 	/// <inheritdoc/>
-	public async Task<IModbusConnection> GetConnection(ILogger? logger = null, CancellationToken cancellationToken = default)
+	public async Task<IModbusConnection> GetConnection(
+		ILogger? logger = null,
+		CancellationToken cancellationToken = default)
 	{
 		var connection = new ModbusTcpConnection(logger);
 		await connection.Connect(HostName, Port, IgnoreTransactionIdMismatch, cancellationToken).NoSync();

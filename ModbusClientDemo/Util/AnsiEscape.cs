@@ -1,4 +1,4 @@
-﻿namespace ModbusClientDemo.Util;
+namespace ModbusClientDemo.Util;
 
 public static class AnsiEscape
 {

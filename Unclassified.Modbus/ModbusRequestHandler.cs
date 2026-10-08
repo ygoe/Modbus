@@ -385,7 +385,9 @@ public class ModbusRequestHandler
 		int address)
 	{
 		if (!objectsByAddress.TryGetValue((ushort)address, out var obj))
-			throw new ModbusException(ModbusError.IllegalDataAddress, $"No {objectType} provided for address {address}.");
+			throw new ModbusException(
+				ModbusError.IllegalDataAddress,
+				$"No {objectType} provided for address {address}.");
 		return obj;
 	}
 

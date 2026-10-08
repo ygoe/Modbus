@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus;
+namespace Unclassified.Modbus;
 
 /// <summary>
 /// Defines a range of Modbus objects to retrieve.

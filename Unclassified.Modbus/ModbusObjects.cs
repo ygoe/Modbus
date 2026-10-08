@@ -1,4 +1,4 @@
-﻿namespace Unclassified.Modbus;
+namespace Unclassified.Modbus;
 
 #region Modbus object interfaces
 
@@ -10,12 +10,12 @@ public interface IModbusObject
 	/// <summary>
 	/// Gets the data object type.
 	/// </summary>
-	ModbusObjectType Type { get; }
+	public ModbusObjectType Type { get; }
 
 	/// <summary>
 	/// Gets the data object address.
 	/// </summary>
-	ushort Address { get; }
+	public ushort Address { get; }
 }
 
 /// <summary>
@@ -26,7 +26,7 @@ public interface IModbusStateObject : IModbusObject
 	/// <summary>
 	/// Gets the bit state of the data object.
 	/// </summary>
-	bool State { get; }
+	public bool State { get; }
 }
 
 /// <summary>
@@ -37,7 +37,7 @@ public interface IModbusValueObject : IModbusObject
 	/// <summary>
 	/// Gets the word value of the data object.
 	/// </summary>
-	ushort Value { get; }
+	public ushort Value { get; }
 }
 
 #endregion Modbus object interfaces

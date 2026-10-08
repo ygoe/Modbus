@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.Extensions.Hosting;
@@ -226,7 +226,8 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					if (readLength == 0)
 						logger?.LogInformation("Connection closed remotely");
 				}
-				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.OperationAborted } ||
+				catch (IOException ex) when (
+					ex.InnerException is SocketException { ErrorCode: (int)SocketError.OperationAborted } ||
 					ex.InnerException is SocketException { ErrorCode: 125 } /* Operation canceled (Linux) */)
 				{
 					// Warning: This error code number (995) may change.
@@ -240,12 +241,14 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					logger?.LogInformation("Connection closed locally");
 					readLength = -1;
 				}
-				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionAborted })
+				catch (IOException ex) when (
+					ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionAborted })
 				{
 					logger?.LogWarning("Connection aborted");
 					readLength = -1;
 				}
-				catch (IOException ex) when (ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionReset })
+				catch (IOException ex) when (
+					ex.InnerException is SocketException { ErrorCode: (int)SocketError.ConnectionReset })
 				{
 					logger?.LogWarning("Connection reset remotely");
 					readLength = -2;
