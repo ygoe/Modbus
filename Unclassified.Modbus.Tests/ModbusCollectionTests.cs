@@ -141,6 +141,30 @@ public class ModbusCollectionTests
 	}
 
 	/// <summary>
+	/// Checks that the objects are copied to an array, which LINQ also uses for collections.
+	/// </summary>
+	[TestMethod]
+	public void CopyTo_CopiesAllObjects()
+	{
+		var collection = new ModbusCollection(ModbusObjectType.Coil);
+		collection.SetState(1, true);
+		collection.SetState(2, false);
+		var array = new IModbusObject[3];
+
+		collection.CopyTo(array, 1);
+		var list = collection.ToList();
+
+		IModbusObject[] expected =
+		[
+			new ModbusCoil { Address = 1, State = true },
+			new ModbusCoil { Address = 2, State = false }
+		];
+		Assert.IsNull(array[0]);
+		CollectionAssert.AreEquivalent(expected, array[1..]);
+		CollectionAssert.AreEquivalent(expected, list);
+	}
+
+	/// <summary>
 	/// Checks that reading an address without an object of the requested kind is rejected.
 	/// </summary>
 	[TestMethod]

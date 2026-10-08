@@ -443,7 +443,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	/// <inheritdoc/>
 	public void CopyTo(IModbusObject[] array, int arrayIndex)
 	{
-		throw new NotImplementedException();
+		objects.Values.CopyTo(array, arrayIndex);
 	}
 
 	/// <inheritdoc/>
