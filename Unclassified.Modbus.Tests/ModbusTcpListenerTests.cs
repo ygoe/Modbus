@@ -37,6 +37,28 @@ public class ModbusTcpListenerTests
 	}
 
 	/// <summary>
+	/// Checks that the listener accepts connections on an IPv4 address.
+	/// </summary>
+	[TestMethod]
+	public async Task Start_IPv4Address_AcceptsConnections()
+	{
+		var handler = new MemoryRequestHandler();
+		handler.HoldingRegisters[0] = 0x1234;
+		using var listener = await StartListener(handler, address: IPAddress.Loopback);
+		int port = listener.LocalEndPoint!.Port;
+		var connectionFactory = new ModbusTcpConnectionFactory("127.0.0.1", port, false);
+		ModbusCollection objects;
+		using (var client = new ModbusClient(connectionFactory, null))
+		{
+			objects = await client.Read(ModbusObjectType.HoldingRegister, 1, new ModbusRange(0));
+		}
+		using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+		await listener.StopAsync(cts.Token).WaitAsync(stopTimeout);
+
+		Assert.AreEqual((ushort)0x1234, objects.GetUInt16(0));
+	}
+
+	/// <summary>
 	/// Checks that the listener can be stopped right after starting it, before it accepts
 	/// connections.
 	/// </summary>
@@ -55,15 +77,22 @@ public class ModbusTcpListenerTests
 	#region Helper methods
 
 	/// <summary>
-	/// Starts a listener on the IPv6 loopback address and an available port.
+	/// Starts a listener on an available port.
 	/// </summary>
+	/// <param name="requestHandler">The request handler of the listener.</param>
+	/// <param name="incompleteRequestTimeout">The incomplete request timeout, or null for the
+	///   default.</param>
+	/// <param name="address">The IP address to listen on, or null for the IPv6 loopback
+	///   address.</param>
+	/// <returns>The started listener.</returns>
 	internal static async Task<ModbusTcpListener> StartListener(
 		ModbusRequestHandler requestHandler,
-		TimeSpan? incompleteRequestTimeout = null)
+		TimeSpan? incompleteRequestTimeout = null,
+		IPAddress? address = null)
 	{
 		var listener = new ModbusTcpListener(requestHandler, null)
 		{
-			IPAddress = IPAddress.IPv6Loopback,
+			IPAddress = address ?? IPAddress.IPv6Loopback,
 			Port = 0
 		};
 		if (incompleteRequestTimeout != null)

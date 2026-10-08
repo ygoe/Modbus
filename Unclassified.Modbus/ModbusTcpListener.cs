@@ -81,7 +81,8 @@ public class ModbusTcpListener : IDisposable, IHostedService
 			throw new ArgumentException($"The port number is not in the valid range: {Port}");
 
 		tcpListener = new TcpListener(IPAddress, Port);
-		tcpListener.Server.DualMode = true;
+		if (IPAddress.AddressFamily == AddressFamily.InterNetworkV6)
+			tcpListener.Server.DualMode = true;
 		tcpListener.Start();
 		logger?.LogInformation("Listening for TCP connections");
 
