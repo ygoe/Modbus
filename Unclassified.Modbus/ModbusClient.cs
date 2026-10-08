@@ -93,6 +93,13 @@ public class ModbusClient : IDisposable
 	public int AllowedRequestWaste { get; init; }
 
 	/// <summary>
+	/// Gets or sets a value indicating whether responses from a different device ID than requested
+	/// are accepted. Default is false, so such responses are rejected with
+	/// <see cref="ModbusError.DeviceIdMismatch"/>.
+	/// </summary>
+	public bool IgnoreDeviceIdMismatch { get; init; }
+
+	/// <summary>
 	/// Gets a value indicating whether the client will always write single Modbus objects to the
 	/// server even if multiple should be written. This state is determined automatically by try and
 	/// error.
@@ -577,9 +584,12 @@ public class ModbusClient : IDisposable
 		var objects = new ModbusCollection(objectType);
 		if (objectType == ModbusObjectType.Coil || objectType == ModbusObjectType.DiscreteInput)
 		{
+			// VIOLATION: Ignore data bytes beyond the requested objects
+			int usedLength = Math.Min(dataLength, (count + 7) / 8);
+			LogIgnoredResponseData(dataLength, usedLength);
 			if (responseEventArgs != null)
 				responseEventArgs.DataArray = new ushort[Math.Min(dataLength * 8, count)];
-			for (int index = 0; index < dataLength; index++)
+			for (int index = 0; index < usedLength; index++)
 			{
 				byte value = responseBody.Span[3 + index];
 				for (int bit = 0; bit < 8 && index * 8 + bit < count; bit++)
@@ -593,9 +603,12 @@ public class ModbusClient : IDisposable
 		}
 		else if (objectType == ModbusObjectType.HoldingRegister || objectType == ModbusObjectType.InputRegister)
 		{
+			// VIOLATION: Ignore registers beyond the requested objects and an incomplete register
+			int registerCount = Math.Min(dataLength / 2, count);
+			LogIgnoredResponseData(dataLength, registerCount * 2);
 			if (responseEventArgs != null)
-				responseEventArgs.DataArray = new ushort[dataLength / 2];
-			for (int addressOffset = 0; addressOffset < dataLength / 2; addressOffset++)
+				responseEventArgs.DataArray = new ushort[registerCount];
+			for (int addressOffset = 0; addressOffset < registerCount; addressOffset++)
 			{
 				ushort value = (ushort)(responseBody.Span[3 + addressOffset * 2] << 8 | responseBody.Span[3 + addressOffset * 2 + 1]);
 				objects.SetUInt16(startAddress + addressOffset, value);
@@ -614,6 +627,20 @@ public class ModbusClient : IDisposable
 			throw new ArgumentException("Invalid Modbus object type: " + objectType);
 		}
 		return objects;
+	}
+
+	/// <summary>
+	/// Logs that a read response contains data bytes that were not decoded.
+	/// </summary>
+	/// <param name="dataLength">The number of data bytes in the response.</param>
+	/// <param name="usedLength">The number of decoded data bytes.</param>
+	private void LogIgnoredResponseData(int dataLength, int usedLength)
+	{
+		if (dataLength > usedLength && logger?.IsEnabled(LogLevel.Debug) == true)
+			logger?.LogDebug(
+				"Response contains {DataLength} data bytes, ignoring {IgnoredLength} bytes that were not requested or are incomplete",
+				dataLength,
+				dataLength - usedLength);
 	}
 
 	#endregion Read request/response coding
@@ -975,6 +1002,7 @@ public class ModbusClient : IDisposable
 						throw TaskHelper.GetOperationCanceledOrTimeoutException(ex, cancellationToken);
 					}
 					logger?.LogTrace("Response ready");
+					CheckResponseMatchesRequest(requestBody.Span, responseBody.Span);
 					return responseBody;
 				}
 				catch (Exception ex)
@@ -986,7 +1014,9 @@ public class ModbusClient : IDisposable
 							if (modbusEx.Code == ModbusError.CrcMismatch ||
 								modbusEx.Code == ModbusError.AddressMismatch ||
 								modbusEx.Code == ModbusError.IncompleteResponse ||
-								modbusEx.Code == ModbusError.TransactionIdMismatch)
+								modbusEx.Code == ModbusError.TransactionIdMismatch ||
+								modbusEx.Code == ModbusError.DeviceIdMismatch ||
+								modbusEx.Code == ModbusError.FunctionCodeMismatch)
 							{
 								// This error suggests that the connection is out of sync somehow.
 								// Close it and start fresh, maybe that helps to recover.
@@ -1040,6 +1070,48 @@ public class ModbusClient : IDisposable
 			}
 			connectionSemaphore.Release();
 		}
+	}
+
+	/// <summary>
+	/// Checks that a response is from the requested device and for the requested function.
+	/// </summary>
+	/// <remarks>
+	/// The function code of an exception response additionally has the exception bit set.
+	/// Responses that are too short to contain the device ID and function code are left to the
+	/// decoding methods, which report them as incomplete.
+	/// </remarks>
+	/// <exception cref="ModbusException">With <see cref="ModbusError.DeviceIdMismatch"/> or
+	///   <see cref="ModbusError.FunctionCodeMismatch"/>.</exception>
+	private void CheckResponseMatchesRequest(
+		ReadOnlySpan<byte> requestBody,
+		ReadOnlySpan<byte> responseBody)
+	{
+		if (responseBody.Length < 2)
+			return;
+
+		if (responseEventArgs != null)
+			responseEventArgs.DeviceId = responseBody[0];
+		if (responseBody[0] != requestBody[0])
+		{
+			if (IgnoreDeviceIdMismatch)
+			{
+				if (logger?.IsEnabled(LogLevel.Debug) == true)
+					logger?.LogDebug(
+						"Response device ID {RcvdDeviceId} does not match request device ID {DeviceId}.",
+						responseBody[0],
+						requestBody[0]);
+			}
+			else
+			{
+				throw new ModbusException(
+					ModbusError.DeviceIdMismatch,
+					$"Response device ID ({responseBody[0]}) does not match request ({requestBody[0]}).");
+			}
+		}
+		if ((responseBody[1] & 0x7f) != requestBody[1])
+			throw new ModbusException(
+				ModbusError.FunctionCodeMismatch,
+				$"Response function code ({responseBody[1] & 0x7f}) does not match request ({requestBody[1]}).");
 	}
 
 	// must be called within semaphore

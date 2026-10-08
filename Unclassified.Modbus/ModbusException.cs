@@ -74,6 +74,9 @@ public class ModbusException : Exception
 		ModbusError.IncompleteResponse => "The received response is too short or ends prematurely.",
 		ModbusError.AddressMismatch => "The received response indicates a different start address than requested.",
 		ModbusError.WriteMismatch => "The received response indicates a different written value than requested.",
+		ModbusError.TransactionIdMismatch => "The received response has a different transaction ID than the request.",
+		ModbusError.DeviceIdMismatch => "The received response is from a different device ID than requested.",
+		ModbusError.FunctionCodeMismatch => "The received response is for a different function code than requested.",
 
 		_ => $"An unknown Modbus exception occurred (code {(int)code}, 0x{(int)code:x2})."
 	};
@@ -179,6 +182,18 @@ public enum ModbusError
 	/// The TCP response transaction ID does not match the request transaction ID.
 	/// </summary>
 	TransactionIdMismatch = 261,
+
+	/// <summary>
+	/// The response device ID does not match the request device ID. This check can be disabled
+	/// with <see cref="ModbusClient.IgnoreDeviceIdMismatch"/>.
+	/// </summary>
+	DeviceIdMismatch = 262,
+
+	/// <summary>
+	/// The response function code does not match the request function code. The response is
+	/// probably about something else than what the request asked for.
+	/// </summary>
+	FunctionCodeMismatch = 263,
 
 	#endregion Internal client errors (above 255)
 }

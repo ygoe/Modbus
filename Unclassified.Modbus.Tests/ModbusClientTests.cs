@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Unclassified.Modbus.Tests.Fakes;
 
 namespace Unclassified.Modbus.Tests;
@@ -546,7 +547,198 @@ public class ModbusClientTests
 
 	#endregion Read device identification
 
+	#region Response checks
+
+	/// <summary>
+	/// Checks that a response for another function is rejected and the connection is closed to
+	/// get back in sync.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherFunctionCode_Throws()
+	{
+		var connection = new FakeConnection(_ => [1, 4, 2, 0x00, 0x01]);
+		using var client = CreateClient(connection);
+		var range = new ModbusRange(0);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Read(
+				ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.FunctionCodeMismatch, ex.Code);
+		Assert.IsFalse(connection.IsOpen);
+	}
+
+	/// <summary>
+	/// Checks that an exception response for another function is rejected instead of being
+	/// reported as the exception.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_ExceptionForOtherFunction_Throws()
+	{
+		var connection = new FakeConnection(_ => [1, 0x84, (byte)ModbusError.IllegalDataAddress]);
+		using var client = CreateClient(connection);
+		var range = new ModbusRange(0);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Read(
+				ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.FunctionCodeMismatch, ex.Code);
+	}
+
+	/// <summary>
+	/// Checks that a write response for another function is rejected.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_WriteOtherFunctionCode_Throws()
+	{
+		var connection = new FakeConnection(_ => [1, 16, 0x00, 0x10, 0x00, 0x01]);
+		using var client = CreateClient(connection);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0xbeef);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Write(1, objects, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.FunctionCodeMismatch, ex.Code);
+	}
+
+	/// <summary>
+	/// Checks that a response from another device is rejected and the connection is closed to
+	/// get back in sync.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherDeviceId_Throws()
+	{
+		var connection = new FakeConnection(_ => [2, 3, 2, 0x00, 0x01]);
+		using var client = CreateClient(connection);
+		var range = new ModbusRange(0);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Read(
+				ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.DeviceIdMismatch, ex.Code);
+		Assert.IsFalse(connection.IsOpen);
+	}
+
+	/// <summary>
+	/// Checks that the request is repeated after a response from another device.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherDeviceId_Retries()
+	{
+		int requestCount = 0;
+		var connection = new FakeConnection(_ =>
+			++requestCount == 1 ? [2, 3, 2, 0x00, 0x02] : [1, 3, 2, 0x00, 0x01]);
+		using var client = CreateClient(connection, retryCount: 1);
+		var range = new ModbusRange(0);
+
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
+
+		Assert.HasCount(2, connection.Requests);
+		Assert.AreEqual((ushort)1, objects.GetUInt16(0));
+	}
+
+	/// <summary>
+	/// Checks that a response from another device is accepted if the check is disabled.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherDeviceIdIgnored_Accepted()
+	{
+		var connection = new FakeConnection(_ => [2, 3, 2, 0x00, 0x01]);
+		using var client = CreateClient(connection, ignoreDeviceIdMismatch: true);
+		var range = new ModbusRange(0);
+
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
+
+		Assert.AreEqual((ushort)1, objects.GetUInt16(0));
+	}
+
+	/// <summary>
+	/// Checks that registers beyond the requested range are ignored, also at the end of the
+	/// address space.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_MoreRegistersThanRequested_IgnoresExtraData()
+	{
+		var connection = new FakeConnection(
+			_ => [1, 3, 8, 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04]);
+		var logger = new ListLogger();
+		using var client = CreateClient(connection, logger: logger);
+		ModbusClient.ResponseEventArgs? responseArgs = null;
+		client.ResponseReceived += (sender, args) => responseArgs = args;
+		var range = new ModbusRange(65534, 65535);
+
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
+
+		Assert.AreEqual(2, objects.Count);
+		Assert.AreEqual((ushort)1, objects.GetUInt16(65534));
+		Assert.AreEqual((ushort)2, objects.GetUInt16(65535));
+		CollectionAssert.AreEqual(new ushort[] { 1, 2 }, responseArgs?.DataArray);
+		AssertIgnoredDataLogged(logger, 4);
+	}
+
+	/// <summary>
+	/// Checks that an incomplete register at the end of the data is ignored and requested
+	/// again.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_IncompleteRegister_IgnoresExtraData()
+	{
+		int requestCount = 0;
+		var connection = new FakeConnection(request =>
+			++requestCount == 1 ?
+				[1, 3, 3, 0x00, 0x05, 0xff] :
+				MakeRegisterReadResponse(request));
+		var logger = new ListLogger();
+		using var client = CreateClient(connection, logger: logger);
+		var range = new ModbusRange(0, 1);
+
+		var objects = await client.Read(
+			ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken);
+
+		CollectionAssert.AreEqual(new[] { (0, 2), (1, 1) }, GetStartAndCounts(connection));
+		Assert.AreEqual((ushort)5, objects.GetUInt16(0));
+		Assert.AreEqual((ushort)1, objects.GetUInt16(1));
+		AssertIgnoredDataLogged(logger, 1);
+	}
+
+	/// <summary>
+	/// Checks that coil data bytes beyond the requested coils are ignored.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_MoreCoilsThanRequested_IgnoresExtraData()
+	{
+		var connection = new FakeConnection(_ => [1, 1, 3, 0x05, 0x02, 0xff]);
+		var logger = new ListLogger();
+		using var client = CreateClient(connection, logger: logger);
+		var range = new ModbusRange(0, 9);
+
+		var objects = await client.Read(
+			ModbusObjectType.Coil, 1, range, TestContext.CancellationToken);
+
+		Assert.AreEqual(10, objects.Count);
+		Assert.IsTrue(objects.GetState(9));
+		AssertIgnoredDataLogged(logger, 1);
+	}
+
+	#endregion Response checks
+
 	#region Helper methods
+
+	/// <summary>
+	/// Checks that the client logged that it ignored the specified number of response data bytes.
+	/// </summary>
+	private static void AssertIgnoredDataLogged(ListLogger logger, int ignoredLength)
+	{
+		bool logged = logger.Entries.Any(e =>
+			e.Level == LogLevel.Debug && e.Message.Contains($"ignoring {ignoredLength} bytes"));
+		Assert.IsTrue(logged, $"No debug message about ignoring {ignoredLength} bytes");
+	}
 
 	/// <summary>
 	/// Creates a client for the fake connection without retry delays.
@@ -556,13 +748,16 @@ public class ModbusClientTests
 		int retryCount = 0,
 		int maxRequestLength = 0,
 		int allowedRequestWaste = 0,
-		TimeSpan? idleTimeout = null)
+		TimeSpan? idleTimeout = null,
+		bool ignoreDeviceIdMismatch = false,
+		ILogger? logger = null)
 	{
-		return new ModbusClient(connection, null)
+		return new ModbusClient(connection, logger)
 		{
 			RetryCount = retryCount,
 			MaxRequestLength = maxRequestLength,
 			AllowedRequestWaste = allowedRequestWaste,
+			IgnoreDeviceIdMismatch = ignoreDeviceIdMismatch,
 			IdleTimeout = idleTimeout ?? TimeSpan.FromSeconds(7),
 			BusyRetryDelay = TimeSpan.Zero,
 			ExceptionRetryDelay = TimeSpan.Zero
