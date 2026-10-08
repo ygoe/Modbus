@@ -4,6 +4,9 @@ using Unclassified.Modbus;
 
 namespace ModbusServerDemo;
 
+/// <summary>
+/// A simple Modbus TCP server that keeps all objects in memory.
+/// </summary>
 public class Program
 {
 	/// <summary>
@@ -18,7 +21,8 @@ public class Program
 	/// </item>
 	/// <item>
 	/// -log level<br/>
-	/// level: trace|debug|info|warn|error|critical|none (case-insensitive, can be abbreviated to first character), default is info
+	/// level: trace|debug|info|warn|error|critical|none (case-insensitive, can be abbreviated to
+	/// first character), default is info
 	/// </item>
 	/// </list>
 	/// </remarks>
@@ -105,19 +109,51 @@ public class Program
 /// </summary>
 internal class MemoryRequestHandler : ModbusRequestHandler
 {
+	/// <summary>
+	/// Synchronizes access to the object arrays.
+	/// </summary>
 	private readonly Lock syncObj = new();
+
+	/// <summary>
+	/// The coil states by address.
+	/// </summary>
 	private readonly bool[] coils = new bool[0x10000];
+
+	/// <summary>
+	/// The discrete input states by address.
+	/// </summary>
 	private readonly bool[] discreteInputs = new bool[0x10000];
+
+	/// <summary>
+	/// The holding register values by address.
+	/// </summary>
 	private readonly ushort[] holdingRegisters = new ushort[0x10000];
+
+	/// <summary>
+	/// The input register values by address.
+	/// </summary>
 	private readonly ushort[] inputRegisters = new ushort[0x10000];
+
+	/// <summary>
+	/// The time when the handler was created, for the uptime in the input registers.
+	/// </summary>
 	private readonly DateTime startTime = DateTime.UtcNow;
 
+	/// <summary>
+	/// Initializes a new instance of the <see cref="MemoryRequestHandler"/> class.
+	/// </summary>
+	/// <param name="logger">The logger instance.</param>
 	public MemoryRequestHandler(ILogger? logger)
 		: base(logger)
 	{
 	}
 
-	protected override Task ProvideReadData(byte deviceId, ModbusRange range, ModbusCollection objects, CancellationToken cancellationToken)
+	/// <inheritdoc/>
+	protected override Task ProvideReadData(
+		byte deviceId,
+		ModbusRange range,
+		ModbusCollection objects,
+		CancellationToken cancellationToken)
 	{
 		lock (syncObj)
 		{
@@ -132,16 +168,16 @@ internal class MemoryRequestHandler : ModbusRequestHandler
 				switch (objects.ObjectType)
 				{
 					case ModbusObjectType.Coil:
-						objects.Add(new ModbusCoil { Address = (ushort)address, State = coils[address] });
+						objects.SetState(address, coils[address]);
 						break;
 					case ModbusObjectType.DiscreteInput:
-						objects.Add(new ModbusDiscreteInput { Address = (ushort)address, State = discreteInputs[address] });
+						objects.SetState(address, discreteInputs[address]);
 						break;
 					case ModbusObjectType.HoldingRegister:
-						objects.Add(new ModbusHoldingRegister { Address = (ushort)address, Value = holdingRegisters[address] });
+						objects.SetUInt16(address, holdingRegisters[address]);
 						break;
 					case ModbusObjectType.InputRegister:
-						objects.Add(new ModbusInputRegister { Address = (ushort)address, Value = inputRegisters[address] });
+						objects.SetUInt16(address, inputRegisters[address]);
 						break;
 				}
 			}
@@ -149,7 +185,12 @@ internal class MemoryRequestHandler : ModbusRequestHandler
 		return Task.CompletedTask;
 	}
 
-	protected override Task ProcessWriteData(byte deviceId, ModbusRange range, ModbusCollection objects, CancellationToken cancellationToken)
+	/// <inheritdoc/>
+	protected override Task ProcessWriteData(
+		byte deviceId,
+		ModbusRange range,
+		ModbusCollection objects,
+		CancellationToken cancellationToken)
 	{
 		lock (syncObj)
 		{

@@ -12,6 +12,9 @@ public class ModbusRequestHandler
 {
 	#region Private data
 
+	/// <summary>
+	/// The logger instance.
+	/// </summary>
 	private readonly ILogger? logger;
 
 	#endregion Private data
@@ -44,7 +47,10 @@ public class ModbusRequestHandler
 	/// The length of the generated response body, in bytes. If 0, no response will be sent. If -1,
 	/// the connection will be closed in response to the request.
 	/// </returns>
-	public virtual async Task<int> HandleRequest(ReadOnlyMemory<byte> requestBody, Memory<byte> responseBody, CancellationToken cancellationToken = default)
+	public virtual async Task<int> HandleRequest(
+		ReadOnlyMemory<byte> requestBody,
+		Memory<byte> responseBody,
+		CancellationToken cancellationToken = default)
 	{
 		if (requestBody.Length < 2)
 		{
@@ -62,16 +68,35 @@ public class ModbusRequestHandler
 				case FunctionCode.ReadDiscreteInputs:
 				case FunctionCode.ReadHoldingRegisters:
 				case FunctionCode.ReadInputRegisters:
-					return await HandleReadRequest(deviceId, functionCode, requestBody, responseBody, cancellationToken).NoSync();
+					return await HandleReadRequest(
+						deviceId,
+						functionCode,
+						requestBody,
+						responseBody,
+						cancellationToken).NoSync();
 				case FunctionCode.WriteCoil:
 				case FunctionCode.WriteHoldingRegister:
-					return await HandleSingleWriteRequest(deviceId, functionCode, requestBody, responseBody, cancellationToken).NoSync();
+					return await HandleSingleWriteRequest(
+						deviceId,
+						functionCode,
+						requestBody,
+						responseBody,
+						cancellationToken).NoSync();
 				case FunctionCode.WriteCoils:
 				case FunctionCode.WriteHoldingRegisters:
-					return await HandleMultipleWriteRequest(deviceId, functionCode, requestBody, responseBody, cancellationToken).NoSync();
+					return await HandleMultipleWriteRequest(
+						deviceId,
+						functionCode,
+						requestBody,
+						responseBody,
+						cancellationToken).NoSync();
 				default:
 					logger?.LogDebug("Unsupported function code {FunctionCode} for device {DeviceId}", (int)functionCode, deviceId);
-					return MakeExceptionResponse(deviceId, functionCode, ModbusError.IllegalFunction, responseBody);
+					return MakeExceptionResponse(
+						deviceId,
+						functionCode,
+						ModbusError.IllegalFunction,
+						responseBody);
 			}
 		}
 		catch (ModbusException ex) when ((int)ex.Code is > 0 and <= 0xff)
@@ -79,14 +104,28 @@ public class ModbusRequestHandler
 			logger?.LogDebug("Responding to {FunctionCode} for device {DeviceId} with exception {ErrorCode}: {Message}", functionCode, deviceId, ex.Code, ex.Message);
 			return MakeExceptionResponse(deviceId, functionCode, ex.Code, responseBody);
 		}
-		catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+		catch (Exception ex) when (
+			ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
 		{
 			logger?.LogError(ex, "Error handling {FunctionCode} for device {DeviceId}: {Message}", functionCode, deviceId, ex.Message);
-			return MakeExceptionResponse(deviceId, functionCode, ModbusError.ServerDeviceFailure, responseBody);
+			return MakeExceptionResponse(
+				deviceId,
+				functionCode,
+				ModbusError.ServerDeviceFailure,
+				responseBody);
 		}
 	}
 
-	private async Task<int> HandleReadRequest(byte deviceId, FunctionCode functionCode, ReadOnlyMemory<byte> requestBody, Memory<byte> responseBody, CancellationToken cancellationToken)
+	/// <summary>
+	/// Handles a request to read coils, discrete inputs, holding registers or input registers.
+	/// </summary>
+	/// <returns>The length of the response body.</returns>
+	private async Task<int> HandleReadRequest(
+		byte deviceId,
+		FunctionCode functionCode,
+		ReadOnlyMemory<byte> requestBody,
+		Memory<byte> responseBody,
+		CancellationToken cancellationToken)
 	{
 		if (requestBody.Length < 6)
 			throw new ModbusException(ModbusError.IllegalDataValue, $"Request is too short: {requestBody.Length} bytes starting at device ID");
@@ -101,7 +140,7 @@ public class ModbusRequestHandler
 			FunctionCode.ReadInputRegisters => ModbusObjectType.InputRegister,
 			_ => throw new InvalidOperationException("Invalid function code.")   // Should never happen
 		};
-		bool isBitType = objectType == ModbusObjectType.Coil || objectType == ModbusObjectType.DiscreteInput;
+		bool isBitType = objectType is ModbusObjectType.Coil or ModbusObjectType.DiscreteInput;
 		int maxCount = ModbusRange.GetMaxReadLength(objectType);
 		if (count < 1 || count > maxCount)
 			throw new ModbusException(ModbusError.IllegalDataValue, $"Requested count ({count}) is not in the valid range 1-{maxCount}.");
@@ -127,7 +166,8 @@ public class ModbusRequestHandler
 			span.Slice(3, byteCount).Clear();
 			for (int i = 0; i < count; i++)
 			{
-				var obj = (IModbusStateObject)GetObject(objectsByAddress, objectType, startAddress + i);
+				var obj = (IModbusStateObject)GetObject(
+					objectsByAddress, objectType, startAddress + i);
 				if (obj.State)
 					span[3 + i / 8] |= (byte)(1 << (i % 8));
 			}
@@ -138,7 +178,8 @@ public class ModbusRequestHandler
 			// Values are written in 2 bytes each
 			for (int i = 0; i < count; i++)
 			{
-				var obj = (IModbusValueObject)GetObject(objectsByAddress, objectType, startAddress + i);
+				var obj = (IModbusValueObject)GetObject(
+					objectsByAddress, objectType, startAddress + i);
 				span[3 + i * 2] = (byte)(obj.Value >> 8);
 				span[3 + i * 2 + 1] = (byte)(obj.Value & 0xff);
 			}
@@ -147,7 +188,16 @@ public class ModbusRequestHandler
 		return 3 + span[2];
 	}
 
-	private async Task<int> HandleSingleWriteRequest(byte deviceId, FunctionCode functionCode, ReadOnlyMemory<byte> requestBody, Memory<byte> responseBody, CancellationToken cancellationToken)
+	/// <summary>
+	/// Handles a request to write a single coil or holding register.
+	/// </summary>
+	/// <returns>The length of the response body.</returns>
+	private async Task<int> HandleSingleWriteRequest(
+		byte deviceId,
+		FunctionCode functionCode,
+		ReadOnlyMemory<byte> requestBody,
+		Memory<byte> responseBody,
+		CancellationToken cancellationToken)
 	{
 		if (requestBody.Length < 6)
 			throw new ModbusException(ModbusError.IllegalDataValue, $"Request is too short: {requestBody.Length} bytes starting at device ID");
@@ -167,14 +217,24 @@ public class ModbusRequestHandler
 			objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
 			objects.SetUInt16(address, value);
 		}
-		await ProcessWriteData(deviceId, new ModbusRange(address), objects, cancellationToken).NoSync();
+		var range = new ModbusRange(address);
+		await ProcessWriteData(deviceId, range, objects, cancellationToken).NoSync();
 
 		// The response is an echo of the request
 		requestBody.Span[..6].CopyTo(responseBody.Span);
 		return 6;
 	}
 
-	private async Task<int> HandleMultipleWriteRequest(byte deviceId, FunctionCode functionCode, ReadOnlyMemory<byte> requestBody, Memory<byte> responseBody, CancellationToken cancellationToken)
+	/// <summary>
+	/// Handles a request to write multiple coils or holding registers.
+	/// </summary>
+	/// <returns>The length of the response body.</returns>
+	private async Task<int> HandleMultipleWriteRequest(
+		byte deviceId,
+		FunctionCode functionCode,
+		ReadOnlyMemory<byte> requestBody,
+		Memory<byte> responseBody,
+		CancellationToken cancellationToken)
 	{
 		if (requestBody.Length < 7)
 			throw new ModbusException(ModbusError.IllegalDataValue, $"Request is too short: {requestBody.Length} bytes starting at device ID");
@@ -183,7 +243,8 @@ public class ModbusRequestHandler
 		int byteCount = requestBody.Span[6];
 
 		bool isCoil = functionCode == FunctionCode.WriteCoils;
-		int maxCount = ModbusRange.GetMaxWriteLength(isCoil ? ModbusObjectType.Coil : ModbusObjectType.HoldingRegister);
+		var objectType = isCoil ? ModbusObjectType.Coil : ModbusObjectType.HoldingRegister;
+		int maxCount = ModbusRange.GetMaxWriteLength(objectType);
 		if (count < 1 || count > maxCount)
 			throw new ModbusException(ModbusError.IllegalDataValue, $"Requested count ({count}) is not in the valid range 1-{maxCount}.");
 		int expectedByteCount = isCoil ? (count + 7) / 8 : count * 2;
@@ -232,7 +293,11 @@ public class ModbusRequestHandler
 	/// The default implementation responds with <see cref="ModbusError.IllegalFunction"/>.
 	/// </para>
 	/// </remarks>
-	protected virtual Task ProvideReadData(byte deviceId, ModbusRange range, ModbusCollection objects, CancellationToken cancellationToken)
+	protected virtual Task ProvideReadData(
+		byte deviceId,
+		ModbusRange range,
+		ModbusCollection objects,
+		CancellationToken cancellationToken)
 	{
 		throw new ModbusException(ModbusError.IllegalFunction);
 	}
@@ -243,8 +308,9 @@ public class ModbusRequestHandler
 	/// <param name="deviceId">The requested device ID.</param>
 	/// <param name="range">The address range of the written objects.</param>
 	/// <param name="objects">The objects to write, one for each address in the
-	///   <paramref name="range"/>. Its <see cref="ModbusCollection.ObjectType"/> is
-	///   <see cref="ModbusObjectType.Coil"/> or <see cref="ModbusObjectType.HoldingRegister"/>.</param>
+	///   <paramref name="range"/>. Its <see cref="ModbusCollection.ObjectType"/> is either
+	///   <see cref="ModbusObjectType.Coil"/> or
+	///   <see cref="ModbusObjectType.HoldingRegister"/>.</param>
 	/// <param name="cancellationToken">A cancellation token used to propagate notification that
 	///   this operation should be canceled.</param>
 	/// <returns>The task object representing the asynchronous operation.</returns>
@@ -258,7 +324,11 @@ public class ModbusRequestHandler
 	/// The default implementation responds with <see cref="ModbusError.IllegalFunction"/>.
 	/// </para>
 	/// </remarks>
-	protected virtual Task ProcessWriteData(byte deviceId, ModbusRange range, ModbusCollection objects, CancellationToken cancellationToken)
+	protected virtual Task ProcessWriteData(
+		byte deviceId,
+		ModbusRange range,
+		ModbusCollection objects,
+		CancellationToken cancellationToken)
 	{
 		throw new ModbusException(ModbusError.IllegalFunction);
 	}
@@ -267,7 +337,20 @@ public class ModbusRequestHandler
 
 	#region Private helper methods
 
-	private static ModbusCollection DecodeWriteData(bool isCoil, int startAddress, int count, ReadOnlySpan<byte> data)
+	/// <summary>
+	/// Decodes the coil states or register values of a multiple write request.
+	/// </summary>
+	/// <param name="isCoil">true to decode coil states, false to decode holding register
+	///   values.</param>
+	/// <param name="startAddress">The address of the first object.</param>
+	/// <param name="count">The number of objects.</param>
+	/// <param name="data">The request data after the byte count.</param>
+	/// <returns>A collection with the decoded objects.</returns>
+	private static ModbusCollection DecodeWriteData(
+		bool isCoil,
+		int startAddress,
+		int count,
+		ReadOnlySpan<byte> data)
 	{
 		ModbusCollection objects;
 		if (isCoil)
@@ -291,14 +374,30 @@ public class ModbusRequestHandler
 		return objects;
 	}
 
-	private static IModbusObject GetObject(Dictionary<ushort, IModbusObject> objectsByAddress, ModbusObjectType objectType, int address)
+	/// <summary>
+	/// Returns the object that the handler provided for an address.
+	/// </summary>
+	/// <exception cref="ModbusException">With <see cref="ModbusError.IllegalDataAddress"/> if no
+	///   object was provided for the address.</exception>
+	private static IModbusObject GetObject(
+		Dictionary<ushort, IModbusObject> objectsByAddress,
+		ModbusObjectType objectType,
+		int address)
 	{
 		if (!objectsByAddress.TryGetValue((ushort)address, out var obj))
 			throw new ModbusException(ModbusError.IllegalDataAddress, $"No {objectType} provided for address {address}.");
 		return obj;
 	}
 
-	private static int MakeExceptionResponse(byte deviceId, FunctionCode functionCode, ModbusError error, Memory<byte> responseBody)
+	/// <summary>
+	/// Writes an exception response to the response body.
+	/// </summary>
+	/// <returns>The length of the response body.</returns>
+	private static int MakeExceptionResponse(
+		byte deviceId,
+		FunctionCode functionCode,
+		ModbusError error,
+		Memory<byte> responseBody)
 	{
 		responseBody.Span[0] = deviceId;
 		responseBody.Span[1] = (byte)((int)functionCode | 0x80);

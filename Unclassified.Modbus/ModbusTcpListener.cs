@@ -267,7 +267,11 @@ public class ModbusTcpListener : IDisposable, IHostedService
 	/// for any other reason than the <paramref name="cancellationToken"/>, the connection is
 	/// closed.
 	/// </summary>
-	private async Task ReadFromClient(TcpClient tcpClient, NetworkStream stream, ByteBuffer byteBuffer, CancellationToken cancellationToken)
+	private async Task ReadFromClient(
+		TcpClient tcpClient,
+		NetworkStream stream,
+		ByteBuffer byteBuffer,
+		CancellationToken cancellationToken)
 	{
 		// MBAP header without the unit ID (6 bytes), then unit ID and PDU (max. 1 + 253 bytes)
 		byte[] header = new byte[6];
@@ -281,7 +285,9 @@ public class ModbusTcpListener : IDisposable, IHostedService
 				await byteBuffer.WaitAsync(cancellationToken).NoSync();
 
 				int length;
-				using (var timeoutCts = TaskHelper.CreateTimeoutCancellationTokenSource(cancellationToken, IncompleteRequestTimeout))
+				using (var timeoutCts = TaskHelper.CreateTimeoutCancellationTokenSource(
+					cancellationToken,
+					IncompleteRequestTimeout))
 				{
 					try
 					{
@@ -293,9 +299,11 @@ public class ModbusTcpListener : IDisposable, IHostedService
 							logger?.LogWarning("Invalid request length {Length}, closing connection", length);
 							return;
 						}
-						await byteBuffer.DequeueAsync(requestBuffer, 0, length, timeoutCts.Token).NoSync();
+						await byteBuffer.DequeueAsync(requestBuffer, 0, length, timeoutCts.Token)
+							.NoSync();
 					}
-					catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+					catch (OperationCanceledException) when (
+						!cancellationToken.IsCancellationRequested)
 					{
 						logger?.LogWarning("Incomplete request was not received in time, closing connection");
 						return;
@@ -309,7 +317,10 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					continue;
 				}
 
-				int responseLength = await requestHandler.HandleRequest(requestBuffer.AsMemory(0, length), responseBuffer.AsMemory(6), cancellationToken).NoSync();
+				int responseLength = await requestHandler.HandleRequest(
+					requestBuffer.AsMemory(0, length),
+					responseBuffer.AsMemory(6),
+					cancellationToken).NoSync();
 				if (responseLength < 0)
 				{
 					logger?.LogInformation("Closing connection as requested by the request handler");
@@ -321,11 +332,13 @@ public class ModbusTcpListener : IDisposable, IHostedService
 					Array.Copy(header, responseBuffer, 4);
 					responseBuffer[4] = (byte)(responseLength >> 8);
 					responseBuffer[5] = (byte)(responseLength & 0xff);
-					await stream.WriteAsync(responseBuffer.AsMemory(0, 6 + responseLength), cancellationToken).NoSync();
+					var response = responseBuffer.AsMemory(0, 6 + responseLength);
+					await stream.WriteAsync(response, cancellationToken).NoSync();
 				}
 			}
 		}
-		catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+		catch (Exception ex) when (
+			ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
 		{
 			logger?.LogError(ex, "Error processing requests, closing connection: {Message}", ex.Message);
 		}
