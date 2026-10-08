@@ -172,22 +172,20 @@ public class ModbusClientTests
 	/// <summary>
 	/// Checks that the whole address space is read with requests within the protocol limit.
 	/// </summary>
-	/// <remarks>
-	/// The server rejects the first request, so that the client does not need to collect all
-	/// objects.
-	/// </remarks>
 	[TestMethod]
 	public async Task Read_WholeAddressSpace_SplitsRequests()
 	{
-		var connection = new FakeConnection(_ => [1, 0x84, (byte)ModbusError.IllegalDataAddress]);
+		var connection = new FakeConnection(request => MakeRegisterReadResponse(request));
 		using var client = CreateClient(connection);
 		var range = new ModbusRange(0, 65535);
 
-		await Assert.ThrowsExactlyAsync<ModbusException>(
-			() => client.Read(
-				ModbusObjectType.InputRegister, 1, range, TestContext.CancellationToken));
+		var objects = await client.Read(
+			ModbusObjectType.InputRegister, 1, range, TestContext.CancellationToken);
 
-		CollectionAssert.AreEqual(new[] { (0, 125) }, GetStartAndCounts(connection));
+		Assert.HasCount(525, connection.Requests);
+		Assert.IsTrue(GetStartAndCounts(connection).All(r => r.Count <= 125));
+		Assert.AreEqual(0x10000, objects.Count);
+		Assert.AreEqual((ushort)65535, objects.GetUInt16(65535));
 	}
 
 	/// <summary>

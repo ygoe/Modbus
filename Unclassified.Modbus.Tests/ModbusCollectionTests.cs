@@ -112,6 +112,66 @@ public class ModbusCollectionTests
 		CollectionAssert.AreEqual(expected, ranges.ToArray());
 	}
 
+	/// <summary>
+	/// Checks that an object is only contained if both its address and its value match.
+	/// </summary>
+	[TestMethod]
+	public void Contains_ComparesAddressAndValue()
+	{
+		var collection = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		collection.SetUInt16(5, 1);
+
+		Assert.IsTrue(collection.Contains(new ModbusHoldingRegister { Address = 5, Value = 1 }));
+		Assert.IsFalse(collection.Contains(new ModbusHoldingRegister { Address = 5, Value = 2 }));
+		Assert.IsFalse(collection.Contains(new ModbusHoldingRegister { Address = 6, Value = 1 }));
+	}
+
+	/// <summary>
+	/// Checks that an object is only removed if both its address and its value match.
+	/// </summary>
+	[TestMethod]
+	public void Remove_ComparesAddressAndValue()
+	{
+		var collection = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		collection.SetUInt16(5, 1);
+
+		Assert.IsFalse(collection.Remove(new ModbusHoldingRegister { Address = 5, Value = 2 }));
+		Assert.IsTrue(collection.Remove(new ModbusHoldingRegister { Address = 5, Value = 1 }));
+		Assert.AreEqual(0, collection.Count);
+	}
+
+	/// <summary>
+	/// Checks that reading an address without an object of the requested kind is rejected.
+	/// </summary>
+	[TestMethod]
+	public void Get_MissingObject_Throws()
+	{
+		var collection = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		collection.SetUInt16(5, 1);
+
+		Assert.ThrowsExactly<InvalidOperationException>(() => collection.GetUInt16(6));
+		Assert.ThrowsExactly<InvalidOperationException>(() => collection.GetState(5));
+	}
+
+	/// <summary>
+	/// Checks that objects can be set and read for the whole address space.
+	/// </summary>
+	[TestMethod]
+	public void WholeAddressSpace_RoundTrip()
+	{
+		var collection = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		for (int address = 0; address <= 0xffff; address++)
+		{
+			collection.SetUInt16(address, (ushort)address);
+		}
+
+		Assert.AreEqual(0x10000, collection.Count);
+		for (int address = 0; address <= 0xffff; address++)
+		{
+			Assert.AreEqual((ushort)address, collection.GetUInt16(address));
+		}
+	}
+
 	#endregion Construction and object management
 
 	#region Typed values

@@ -7,11 +7,17 @@ namespace Unclassified.Modbus;
 /// <summary>
 /// Contains Modbus data objects of a single type.
 /// </summary>
+/// <remarks>
+/// The collection contains at most one object per address. The enumeration order is unspecified.
+/// </remarks>
 public class ModbusCollection : ICollection<IModbusObject>
 {
 	#region Private data
 
-	private readonly List<IModbusObject> objects = [];
+	/// <summary>
+	/// The objects by address.
+	/// </summary>
+	private readonly Dictionary<ushort, IModbusObject> objects = [];
 
 	#endregion Private data
 
@@ -34,12 +40,17 @@ public class ModbusCollection : ICollection<IModbusObject>
 	///   same <see cref="IModbusObject.Type"/>.</param>
 	public ModbusCollection(IEnumerable<IModbusObject> objects)
 	{
-		this.objects.AddRange(objects);
-		if (this.objects.Count == 0)
+		ModbusObjectType? objectType = null;
+		foreach (var obj in objects)
+		{
+			objectType ??= obj.Type;
+			if (obj.Type != objectType)
+				throw new ArgumentException("Inconsistent Modbus object types specified.");
+			this.objects[obj.Address] = obj;
+		}
+		if (objectType == null)
 			throw new ArgumentException("At least one Modbus object must be specified for the collection. Use another constructor to create an empty collection.");
-		ObjectType = this.objects[0].Type;
-		if (!this.objects.All(e => e.Type == ObjectType))
-			throw new ArgumentException("Inconsistent Modbus object types specified.");
+		ObjectType = objectType.Value;
 	}
 
 	#endregion Constructors
@@ -68,7 +79,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	/// <returns></returns>
 	public IList<ModbusRange> GetRanges(int maxLength, int allowedWaste)
 	{
-		var objectRanges = objects.Select(o => new ModbusRange(o.Address));
+		var objectRanges = objects.Keys.Select(address => new ModbusRange(address));
 		return ModbusRange.Combine(objectRanges, maxLength, allowedWaste);
 	}
 
@@ -81,16 +92,14 @@ public class ModbusCollection : ICollection<IModbusObject>
 	/// </summary>
 	/// <param name="address">The address of the object to retrieve.</param>
 	/// <returns>The bit value of the object.</returns>
-	public bool GetState(int address) =>
-		objects.OfType<IModbusStateObject>().First(e => e.Address == address).State;
+	public bool GetState(int address) => GetObject<IModbusStateObject>(address).State;
 
 	/// <summary>
 	/// Gets the unsigned 16-bit value of the object at the specified <paramref name="address"/>.
 	/// </summary>
 	/// <param name="address">The address of the object to retrieve.</param>
 	/// <returns>The value of the object.</returns>
-	public ushort GetUInt16(int address) =>
-		objects.OfType<IModbusValueObject>().First(e => e.Address == address).Value;
+	public ushort GetUInt16(int address) => GetObject<IModbusValueObject>(address).Value;
 
 	/// <summary>
 	/// Gets the signed 16-bit value of the object at the specified <paramref name="address"/>.
@@ -211,8 +220,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	public void SetState(int address, bool state)
 	{
 		CheckStateObjectType();
-		objects.RemoveAll(e => e.Address == address);
-		objects.Add(CreateStateObject(address, state));
+		Set(CreateStateObject(address, state));
 	}
 
 	/// <summary>
@@ -224,8 +232,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	public void SetUInt16(int address, ushort value)
 	{
 		CheckValueObjectType();
-		objects.RemoveAll(e => e.Address == address);
-		objects.Add(CreateValueObject(address, value));
+		Set(CreateValueObject(address, value));
 	}
 
 	/// <summary>
@@ -245,10 +252,8 @@ public class ModbusCollection : ICollection<IModbusObject>
 	public void SetUInt32(int address, uint value)
 	{
 		CheckValueObjectType();
-		objects.RemoveAll(e => e.Address == address + 0);
-		objects.RemoveAll(e => e.Address == address + 1);
-		objects.Add(CreateValueObject(address + 0, (ushort)(value >> 16)));
-		objects.Add(CreateValueObject(address + 1, (ushort)(value & 0xffff)));
+		Set(CreateValueObject(address + 0, (ushort)(value >> 16)));
+		Set(CreateValueObject(address + 1, (ushort)(value & 0xffff)));
 	}
 
 	/// <summary>
@@ -268,14 +273,10 @@ public class ModbusCollection : ICollection<IModbusObject>
 	public void SetUInt64(int address, ulong value)
 	{
 		CheckValueObjectType();
-		objects.RemoveAll(e => e.Address == address + 0);
-		objects.RemoveAll(e => e.Address == address + 1);
-		objects.RemoveAll(e => e.Address == address + 2);
-		objects.RemoveAll(e => e.Address == address + 3);
-		objects.Add(CreateValueObject(address + 0, (ushort)(value >> 48)));
-		objects.Add(CreateValueObject(address + 1, unchecked((ushort)(value >> 32))));
-		objects.Add(CreateValueObject(address + 2, unchecked((ushort)(value >> 16))));
-		objects.Add(CreateValueObject(address + 3, (ushort)(value & 0xffff)));
+		Set(CreateValueObject(address + 0, (ushort)(value >> 48)));
+		Set(CreateValueObject(address + 1, unchecked((ushort)(value >> 32))));
+		Set(CreateValueObject(address + 2, unchecked((ushort)(value >> 16))));
+		Set(CreateValueObject(address + 3, (ushort)(value & 0xffff)));
 	}
 
 	/// <summary>
@@ -316,11 +317,10 @@ public class ModbusCollection : ICollection<IModbusObject>
 		CheckSingleByteEncoding(encoding);
 		for (int addressOffset = 0; addressOffset < (value.Length + 1) / 2; addressOffset++)
 		{
-			objects.RemoveAll(e => e.Address == address + addressOffset);
 			ushort word = (ushort)(encoding.GetBytes([value[addressOffset * 2]])[0] << 8);
 			if (addressOffset * 2 + 1 < value.Length)
 				word |= encoding.GetBytes([value[addressOffset * 2 + 1]])[0];
-			objects.Add(CreateValueObject(address + addressOffset, word));
+			Set(CreateValueObject(address + addressOffset, word));
 		}
 	}
 
@@ -335,14 +335,43 @@ public class ModbusCollection : ICollection<IModbusObject>
 		CheckValueObjectType();
 		for (int addressOffset = 0; addressOffset < value.Length; addressOffset++)
 		{
-			objects.RemoveAll(e => e.Address == address + addressOffset);
-			objects.Add(CreateValueObject(address + addressOffset, value[addressOffset]));
+			Set(CreateValueObject(address + addressOffset, value[addressOffset]));
 		}
 	}
 
 	#endregion Data manipulation
 
 	#region Private helper methods
+
+	/// <summary>
+	/// Returns the object of the specified kind at the specified address.
+	/// </summary>
+	/// <typeparam name="T">The kind of object, <see cref="IModbusStateObject"/> or
+	///   <see cref="IModbusValueObject"/>.</typeparam>
+	/// <param name="address">The address of the object.</param>
+	/// <returns>The object.</returns>
+	/// <exception cref="InvalidOperationException">The collection contains no such object at the
+	///   address.</exception>
+	private T GetObject<T>(int address)
+		where T : IModbusObject
+	{
+		if (address is >= 0 and <= ushort.MaxValue &&
+			objects.TryGetValue((ushort)address, out var obj) &&
+			obj is T typedObject)
+		{
+			return typedObject;
+		}
+		throw new InvalidOperationException($"The collection contains no {typeof(T).Name} at address {address}.");
+	}
+
+	/// <summary>
+	/// Adds an object to the collection or replaces the object at its address.
+	/// </summary>
+	/// <param name="obj">The object to set.</param>
+	private void Set(IModbusObject obj)
+	{
+		objects[obj.Address] = obj;
+	}
 
 	private void CheckStateObjectType()
 	{
@@ -387,8 +416,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	{
 		if (item.Type != ObjectType)
 			throw new InvalidOperationException($"The new item object type ({item.Type}) does not match the collection ({ObjectType}).");
-		objects.RemoveAll(o => o.Address == item.Address);
-		objects.Add(item);
+		Set(item);
 	}
 
 	/// <inheritdoc/>
@@ -409,7 +437,7 @@ public class ModbusCollection : ICollection<IModbusObject>
 	/// <inheritdoc/>
 	public bool Contains(IModbusObject item)
 	{
-		return objects.Contains(item);
+		return objects.TryGetValue(item.Address, out var obj) && obj.Equals(item);
 	}
 
 	/// <inheritdoc/>
@@ -421,18 +449,18 @@ public class ModbusCollection : ICollection<IModbusObject>
 	/// <inheritdoc/>
 	public bool Remove(IModbusObject item)
 	{
-		return objects.Remove(item);
+		return Contains(item) && objects.Remove(item.Address);
 	}
 
 	/// <inheritdoc/>
 	public IEnumerator<IModbusObject> GetEnumerator()
 	{
-		return objects.GetEnumerator();
+		return objects.Values.GetEnumerator();
 	}
 
 	IEnumerator IEnumerable.GetEnumerator()
 	{
-		return objects.GetEnumerator();
+		return objects.Values.GetEnumerator();
 	}
 
 	#endregion ICollection implementation
