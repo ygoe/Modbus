@@ -521,7 +521,7 @@ public class ModbusClient : IDisposable
 		byte deviceId,
 		ModbusObjectType objectType,
 		ushort startAddress,
-		ushort count)
+		int count)
 	{
 		byte[] bytes = new byte[6];
 		bytes[0] = deviceId;
@@ -543,7 +543,7 @@ public class ModbusClient : IDisposable
 			requestEventArgs.DeviceId = deviceId;
 			requestEventArgs.FunctionCode = ((FunctionCode)bytes[1]).ToString();
 			requestEventArgs.StartAddress = startAddress;
-			requestEventArgs.Count = count;
+			requestEventArgs.Count = (ushort)count;
 		}
 		return bytes;
 	}
@@ -552,7 +552,7 @@ public class ModbusClient : IDisposable
 		ReadOnlyMemory<byte> responseBody,
 		ModbusObjectType objectType,
 		ushort startAddress,
-		ushort count)
+		int count)
 	{
 		if (responseBody.Length < 3)
 			throw new ModbusException(
@@ -721,7 +721,7 @@ public class ModbusClient : IDisposable
 	private ReadOnlyMemory<byte> MakeMultipleWriteRequest(
 		byte deviceId,
 		ushort startAddress,
-		ushort count,
+		int count,
 		ModbusCollection objects)
 	{
 		byte dataLength = objects.ObjectType switch
@@ -788,12 +788,15 @@ public class ModbusClient : IDisposable
 			requestEventArgs.DeviceId = deviceId;
 			requestEventArgs.FunctionCode = ((FunctionCode)bytes[1]).ToString();
 			requestEventArgs.StartAddress = startAddress;
-			requestEventArgs.Count = count;
+			requestEventArgs.Count = (ushort)count;
 		}
 		return bytes;
 	}
 
-	private int DecodeMultipleWriteResponse(ReadOnlyMemory<byte> responseBody, ushort startAddress, ushort count)
+	private int DecodeMultipleWriteResponse(
+		ReadOnlyMemory<byte> responseBody,
+		ushort startAddress,
+		int count)
 	{
 		if (responseBody.Length < 3)
 			throw new ModbusException(

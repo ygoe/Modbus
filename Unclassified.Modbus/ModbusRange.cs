@@ -48,7 +48,7 @@ public readonly struct ModbusRange
 	/// <summary>
 	/// Gets the number of objects.
 	/// </summary>
-	public ushort Length => (ushort)(EndAddress - StartAddress + 1);
+	public int Length => EndAddress - StartAddress + 1;
 
 	#endregion Properties
 

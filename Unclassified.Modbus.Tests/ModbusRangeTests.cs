@@ -28,6 +28,15 @@ public class ModbusRangeTests
 	}
 
 	/// <summary>
+	/// Checks the length of a range that covers the whole address space.
+	/// </summary>
+	[TestMethod]
+	public void Length_WholeAddressSpace()
+	{
+		Assert.AreEqual(0x10000, new ModbusRange(0, 65535).Length);
+	}
+
+	/// <summary>
 	/// Checks that a subrange starts at the offset and keeps the end address.
 	/// </summary>
 	[TestMethod]
@@ -172,6 +181,19 @@ public class ModbusRangeTests
 	public void Combine_EndOfAddressSpace_Merges()
 	{
 		AssertCombine([new(65530, 65532), new(65533, 65535)], 100, 0, [new(65530, 65535)]);
+	}
+
+	/// <summary>
+	/// Checks that a range that covers the whole address space is split.
+	/// </summary>
+	[TestMethod]
+	public void Combine_WholeAddressSpace_Splits()
+	{
+		var ranges = ModbusRange.Combine([new ModbusRange(0, 65535)], 125, 0);
+
+		Assert.HasCount(525, ranges);
+		Assert.AreEqual(new ModbusRange(0, 124), ranges[0]);
+		Assert.AreEqual(new ModbusRange(65500, 65535), ranges[^1]);
 	}
 
 	#endregion Combine
