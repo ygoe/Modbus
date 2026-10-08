@@ -48,11 +48,8 @@ public class ModbusTcpTests
 	[TestCleanup]
 	public async Task StopListener()
 	{
-		if (listener.LocalEndPoint != null)
-		{
-			using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-			await listener.StopAsync(cts.Token);
-		}
+		using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+		await listener.StopAsync(cts.Token);
 		listener.Dispose();
 	}
 

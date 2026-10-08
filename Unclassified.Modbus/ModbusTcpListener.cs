@@ -93,7 +93,8 @@ public class ModbusTcpListener : IDisposable, IHostedService
 
 	/// <summary>
 	/// Called when the application host is performing a graceful shutdown. This stops the TCP
-	/// listener and waits for the client connections to close.
+	/// listener and waits for the client connections to close. Stopping a stopped listener has no
+	/// effect.
 	/// </summary>
 	/// <param name="cancellationToken">Indicates that the shutdown process should no longer be
 	///   graceful. Remaining client connections will be closed then.</param>
@@ -102,7 +103,7 @@ public class ModbusTcpListener : IDisposable, IHostedService
 		if (runTask == null)
 			throw new InvalidOperationException("The listener service was not started.");
 
-		tcpListener!.Stop();
+		tcpListener?.Stop();
 		using (cancellationToken.Register(() => runListenerCts!.Cancel(), useSynchronizationContext: false))
 		{
 			await runTask.NoSync();

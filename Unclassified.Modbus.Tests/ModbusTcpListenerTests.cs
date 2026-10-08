@@ -72,6 +72,20 @@ public class ModbusTcpListenerTests
 		}
 	}
 
+	/// <summary>
+	/// Checks that stopping a stopped listener has no effect.
+	/// </summary>
+	[TestMethod]
+	public async Task Stop_Twice_Completes()
+	{
+		using var listener = await StartListener(new MemoryRequestHandler());
+
+		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
+		await listener.StopAsync(CancellationToken.None).WaitAsync(stopTimeout);
+
+		Assert.IsNull(listener.LocalEndPoint);
+	}
+
 	#endregion Listener lifecycle
 
 	#region Helper methods
