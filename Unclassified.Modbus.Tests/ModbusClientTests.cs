@@ -254,6 +254,25 @@ public class ModbusClientTests
 		CollectionAssert.AreEqual(new ushort[] { 10, 11 }, responseArgs.DataArray);
 	}
 
+	/// <summary>
+	/// Checks that the response event contains one state value for each read coil.
+	/// </summary>
+	[TestMethod]
+	public async Task Read_Coils_RaisesEventWithStates()
+	{
+		var connection = new FakeConnection(_ => [1, 1, 2, 0x05, 0x02]);
+		using var client = CreateClient(connection);
+		ModbusClient.ResponseEventArgs? responseArgs = null;
+		client.ResponseReceived += (sender, args) => responseArgs = args;
+
+		await client.Read(ModbusObjectType.Coil, 1, new ModbusRange(0, 9));
+
+		Assert.IsNotNull(responseArgs);
+		CollectionAssert.AreEqual(
+			new ushort[] { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+			responseArgs.DataArray);
+	}
+
 	#endregion Read
 
 	#region Write
@@ -330,6 +349,30 @@ public class ModbusClientTests
 		CollectionAssert.AreEqual(
 			new byte[] { 1, 15, 0x00, 0x00, 0x00, 10, 2, 0x05, 0x02 },
 			connection.Requests.Single());
+	}
+
+	/// <summary>
+	/// Checks that the request event contains one state value for each written coil.
+	/// </summary>
+	[TestMethod]
+	public async Task Write_MultipleCoils_RaisesEventWithStates()
+	{
+		var connection = new FakeConnection(request => request[..6]);
+		using var client = CreateClient(connection);
+		ModbusClient.RequestEventArgs? requestArgs = null;
+		client.SendingRequest += (sender, args) => requestArgs = args;
+		var objects = new ModbusCollection(ModbusObjectType.Coil);
+		for (int address = 0; address < 10; address++)
+		{
+			objects.SetState(address, address is 0 or 2 or 9);
+		}
+
+		await client.Write(1, objects);
+
+		Assert.IsNotNull(requestArgs);
+		CollectionAssert.AreEqual(
+			new ushort[] { 1, 0, 1, 0, 0, 0, 0, 0, 0, 1 },
+			requestArgs.DataArray);
 	}
 
 	/// <summary>

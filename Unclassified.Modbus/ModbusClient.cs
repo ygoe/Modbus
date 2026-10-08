@@ -536,7 +536,7 @@ public class ModbusClient : IDisposable
 		if (objectType == ModbusObjectType.Coil || objectType == ModbusObjectType.DiscreteInput)
 		{
 			if (responseEventArgs != null)
-				responseEventArgs.DataArray = new ushort[dataLength * 8];
+				responseEventArgs.DataArray = new ushort[Math.Min(dataLength * 8, count)];
 			for (int index = 0; index < dataLength; index++)
 			{
 				byte value = responseBody.Span[3 + index];
@@ -545,7 +545,7 @@ public class ModbusClient : IDisposable
 					bool state = (value & (1 << bit)) != 0;
 					objects.SetState(startAddress + index * 8 + bit, state);
 					if (responseEventArgs != null)
-						responseEventArgs.DataArray![index * 8 + bit] = value;
+						responseEventArgs.DataArray![index * 8 + bit] = state ? (ushort)1 : (ushort)0;
 				}
 			}
 		}
@@ -689,7 +689,7 @@ public class ModbusClient : IDisposable
 		{
 			// State bits are written in address order from least to most significant bit, one byte after the other
 			if (requestEventArgs != null)
-				requestEventArgs.DataArray = new ushort[count * 8];
+				requestEventArgs.DataArray = new ushort[count];
 			for (int i = 0; i < count; i += 8)
 			{
 				byte value = 0;
