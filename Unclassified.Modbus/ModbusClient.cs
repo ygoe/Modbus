@@ -247,31 +247,26 @@ public class ModbusClient : IDisposable
 				responseEventArgs = ResponseReceived != null ? new ResponseEventArgs() : null;
 				var requestBody = MakeReadRequest(
 					(byte)deviceId, objectType, currentRange.StartAddress, currentRange.Length);
-				var responseBody = await SendRequest(requestBody, cancellationToken).NoSync();
 				ModbusCollection objects;
 				try
 				{
-					objects = DecodeReadResponse(
-						responseBody, objectType, currentRange.StartAddress, currentRange.Length);
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
+					objects = await SendRequest(
+						requestBody,
+						responseBody => DecodeReadResponse(
+							responseBody,
+							objectType,
+							currentRange.StartAddress,
+							currentRange.Length),
+						cancellationToken).NoSync();
 				}
 				catch (ModbusException ex) when (ex.Code == ModbusError.ServerDeviceBusy)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					if (retryCount-- <= 0)
 						throw;
 					// Repeat that later
 					logger?.LogDebug("Server is busy, retrying later...");
 					await Task.Delay(RandomizeTimeSpan(BusyRetryDelay), cancellationToken).NoSync();
 					continue;
-				}
-				catch (Exception)
-				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
-					throw;
 				}
 				results.AddRange(objects);
 				if (objects.Count >= currentRange.Length)
@@ -326,22 +321,24 @@ public class ModbusClient : IDisposable
 					MakeSingleWriteRequest((byte)deviceId, currentRange.StartAddress, objects) :
 					MakeMultipleWriteRequest(
 						(byte)deviceId, currentRange.StartAddress, currentRange.Length, objects);
-				var responseBody = await SendRequest(requestBody, cancellationToken, writeSingle: writeSingle).NoSync();
-				if (responseBody.IsEmpty)
-				{
-					retryCount = RetryCount;
-					continue;
-				}
-				int writtenCount = 1;
+				int? writtenCount;
 				try
 				{
-					if (writeSingle)
-						DecodeSingleWriteResponse(responseBody, currentRange.StartAddress, objects);
-					else
-						writtenCount = DecodeMultipleWriteResponse(
-							responseBody, currentRange.StartAddress, currentRange.Length);
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
+					writtenCount = await SendRequest<int?>(
+						requestBody,
+						responseBody =>
+						{
+							if (writeSingle)
+							{
+								DecodeSingleWriteResponse(
+									responseBody, currentRange.StartAddress, objects);
+								return 1;
+							}
+							return DecodeMultipleWriteResponse(
+								responseBody, currentRange.StartAddress, currentRange.Length);
+						},
+						cancellationToken,
+						writeSingle: writeSingle).NoSync();
 				}
 				catch (ModbusException ex) when (
 					ex.Code == ModbusError.IllegalFunction &&
@@ -350,8 +347,6 @@ public class ModbusClient : IDisposable
 					!AlwaysWriteMultiple)
 				{
 					logger?.LogDebug("Server does not support writing multiple objects, switching to single write mode.");
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					AlwaysWriteSingle = true;
 					retryCount = RetryCount;
 					continue;
@@ -363,16 +358,12 @@ public class ModbusClient : IDisposable
 					!AlwaysWriteMultiple)
 				{
 					logger?.LogDebug("Server does not support writing single objects, switching to multiple write mode.");
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					AlwaysWriteMultiple = true;
 					retryCount = RetryCount;
 					continue;
 				}
 				catch (ModbusException ex) when (ex.Code == ModbusError.ServerDeviceBusy)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					if (retryCount-- <= 0)
 						throw;
 					// Repeat that later
@@ -380,16 +371,16 @@ public class ModbusClient : IDisposable
 					await Task.Delay(RandomizeTimeSpan(BusyRetryDelay), cancellationToken).NoSync();
 					continue;
 				}
-				catch (Exception)
+				if (writtenCount == null)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
-					throw;
+					// The write mode was switched, repeat the request in the new mode
+					retryCount = RetryCount;
+					continue;
 				}
 				if (writtenCount >= currentRange.Length)
 					break;
 				// VIOLATION: Repeat for remaining objects not included in the response
-				currentRange = currentRange.Subrange(writtenCount);
+				currentRange = currentRange.Subrange(writtenCount.Value);
 				retryCount = RetryCount;
 			}
 		}
@@ -419,38 +410,25 @@ public class ModbusClient : IDisposable
 				requestEventArgs = SendingRequest != null ? new RequestEventArgs() : null;
 				responseEventArgs = ResponseReceived != null ? new ResponseEventArgs() : null;
 				var requestBody = MakeReadIdRequest((byte)deviceId, category, nextObjectId);
-				var responseBody = await SendRequest(requestBody, cancellationToken).NoSync();
+				ReadIdStatus response;
 				try
 				{
-					DecodeReadIdResponse(
-						responseBody, results, out byte conformityLevel, out bool moreFollows, out var newNextObjectId);
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
-					byte newMaxCategory = (byte)(conformityLevel & 0x7f);
-					if (newMaxCategory != maxCategory)
-					{
-						if (logger?.IsEnabled(LogLevel.Trace) == true)
-							logger?.LogTrace(
-								"Device indicated support of data category {NewMaxCategory}, was {MaxCategory}.",
-								newMaxCategory,
-								maxCategory);
-						maxCategory = newMaxCategory;
-					}
-					if (!moreFollows)
-						break;
-					if (newNextObjectId <= nextObjectId)
-					{
-						// Not incrementing the next read ID would return in an endless loop, stop here
-						throw new ModbusException(
-							ModbusError.ReadDeviceIdentificationLoop,
-							"The read device identification function suggests reading the data in an endless loop. It is unclear whether the data can be read completely.");
-					}
-					nextObjectId = newNextObjectId;
+					response = await SendRequest(
+						requestBody,
+						responseBody =>
+						{
+							DecodeReadIdResponse(
+								responseBody,
+								results,
+								out byte conformityLevel,
+								out bool moreFollows,
+								out var newNextObjectId);
+							return new ReadIdStatus(conformityLevel, moreFollows, newNextObjectId);
+						},
+						cancellationToken).NoSync();
 				}
 				catch (ModbusException ex) when (ex.Code == ModbusError.ServerDeviceBusy)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					if (retryCount-- <= 0)
 						throw;
 					// Repeat that later
@@ -463,21 +441,35 @@ public class ModbusClient : IDisposable
 					(category == 2 || category == 3) &&
 					nextObjectId == 0)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
 					// The other categories might need to start reading at their specific first object, try that.
 					// VIOLATION: This should not be necessary by the Modbus spec but helps with the Solvimus M-Bus gateway
 					if (category == 2)
 						nextObjectId = ModbusDeviceIdentificationObject.VendorUrl;
 					if (category == 3)
 						nextObjectId = ModbusDeviceIdentificationObject.FirstPrivateObject;
+					retryCount = RetryCount;
+					continue;
 				}
-				catch (Exception)
+				byte newMaxCategory = (byte)(response.ConformityLevel & 0x7f);
+				if (newMaxCategory != maxCategory)
 				{
-					if (responseEventArgs != null)
-						ResponseReceived?.Invoke(this, responseEventArgs);
-					throw;
+					if (logger?.IsEnabled(LogLevel.Trace) == true)
+						logger?.LogTrace(
+							"Device indicated support of data category {NewMaxCategory}, was {MaxCategory}.",
+							newMaxCategory,
+							maxCategory);
+					maxCategory = newMaxCategory;
 				}
+				if (!response.MoreFollows)
+					break;
+				if (response.NextObjectId <= nextObjectId)
+				{
+					// Not incrementing the next read ID would return in an endless loop, stop here
+					throw new ModbusException(
+						ModbusError.ReadDeviceIdentificationLoop,
+						"The read device identification function suggests reading the data in an endless loop. It is unclear whether the data can be read completely.");
+				}
+				nextObjectId = response.NextObjectId;
 				// Repeat for remaining objects not included in the response (this is expected and
 				// described in the Modbus specification)
 				retryCount = RetryCount;
@@ -965,14 +957,46 @@ public class ModbusClient : IDisposable
 		}
 	}
 
+	/// <summary>
+	/// The status information of a read device identification response.
+	/// </summary>
+	/// <param name="ConformityLevel">The conformity level of the device.</param>
+	/// <param name="MoreFollows">Indicates whether more objects can be requested.</param>
+	/// <param name="NextObjectId">The ID of the object to request next if more follow.</param>
+	private readonly record struct ReadIdStatus(
+		byte ConformityLevel,
+		bool MoreFollows,
+		ModbusDeviceIdentificationObject NextObjectId);
+
 	#endregion Read device identification coding
 
 	#region Internal request methods
 
+	/// <summary>
+	/// Sends a request to the server and decodes the response, repeating the request after errors.
+	/// </summary>
+	/// <typeparam name="T">The type of the decoded response.</typeparam>
+	/// <param name="requestBody">The request body to send.</param>
+	/// <param name="decodeResponse">Decodes the response body. It is only called for a response
+	///   from the requested device and for the requested function.</param>
+	/// <param name="cancellationToken">A cancellation token used to propagate notification that
+	///   this operation should be canceled.</param>
+	/// <param name="writeSingle">true for a request that writes a single object, false for a
+	///   request that writes multiple objects, null for other requests.</param>
+	/// <returns>The decoded response, or the default value if the write request should be repeated
+	///   in the other write mode.</returns>
+	/// <remarks>
+	/// Connection errors and errors that suggest that the response does not belong to the request
+	/// (see <see cref="IsOutOfSyncError"/>) are retried. Other <see cref="ModbusException"/>s, for
+	/// exception responses or a different written value, are thrown without retrying, so that the
+	/// caller can handle them. The <see cref="ResponseReceived"/> event is raised for each received
+	/// response.
+	/// </remarks>
 	[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1068:CancellationToken parameters must come last",
 		Justification = "writeSingle is less commonly used")]
-	private async Task<ReadOnlyMemory<byte>> SendRequest(
+	private async Task<T> SendRequest<T>(
 		ReadOnlyMemory<byte> requestBody,
+		Func<ReadOnlyMemory<byte>, T> decodeResponse,
 		CancellationToken cancellationToken = default,
 		bool? writeSingle = null)
 	{
@@ -1002,29 +1026,34 @@ public class ModbusClient : IDisposable
 						throw TaskHelper.GetOperationCanceledOrTimeoutException(ex, cancellationToken);
 					}
 					logger?.LogTrace("Response ready");
-					CheckResponseMatchesRequest(requestBody.Span, responseBody.Span);
-					return responseBody;
+					try
+					{
+						CheckResponseMatchesRequest(requestBody.Span, responseBody.Span);
+						return decodeResponse(responseBody);
+					}
+					finally
+					{
+						if (responseEventArgs != null)
+							ResponseReceived?.Invoke(this, responseEventArgs);
+					}
+				}
+				catch (ModbusException ex) when (!IsOutOfSyncError(ex.Code))
+				{
+					// The response belongs to the request, the caller handles the reported error
+					throw;
 				}
 				catch (Exception ex)
 				{
 					if (retryCount-- <= 0 || ex is OperationCanceledException)
 					{
-						if (ex is ModbusException modbusEx)
+						if (ex is ModbusException modbusEx && IsOutOfSyncError(modbusEx.Code))
 						{
-							if (modbusEx.Code == ModbusError.CrcMismatch ||
-								modbusEx.Code == ModbusError.AddressMismatch ||
-								modbusEx.Code == ModbusError.IncompleteResponse ||
-								modbusEx.Code == ModbusError.TransactionIdMismatch ||
-								modbusEx.Code == ModbusError.DeviceIdMismatch ||
-								modbusEx.Code == ModbusError.FunctionCodeMismatch)
-							{
-								// This error suggests that the connection is out of sync somehow.
-								// Close it and start fresh, maybe that helps to recover.
-								logger?.LogWarning(
-									"Connection seems out of sync (error code: {ErrorCode}), closing connection to recover.",
-									modbusEx.Code);
-								connection?.Close();
-							}
+							// This error suggests that the connection is out of sync somehow.
+							// Close it and start fresh, maybe that helps to recover.
+							logger?.LogWarning(
+								"Connection seems out of sync (error code: {ErrorCode}), closing connection to recover.",
+								modbusEx.Code);
+							connection?.Close();
 						}
 						// Finally fail the request, we've done all we can
 						throw;
@@ -1036,14 +1065,14 @@ public class ModbusClient : IDisposable
 							logger?.LogDebug("Server does not respond to writing single objects, switching to multiple write mode.");
 							AlwaysWriteMultiple = true;
 							// VIOLATION: Indicate retry with new request
-							return default;
+							return default!;
 						}
 						if (writeSingle == false && !AlwaysWriteSingle && !AlwaysWriteMultiple)
 						{
 							logger?.LogDebug("Server does not respond to writing multiple objects, switching to single write mode.");
 							AlwaysWriteSingle = true;
 							// VIOLATION: Indicate retry with new request
-							return default;
+							return default!;
 						}
 						logger?.LogWarning("Retrying after timeout");
 					}
@@ -1071,6 +1100,21 @@ public class ModbusClient : IDisposable
 			connectionSemaphore.Release();
 		}
 	}
+
+	/// <summary>
+	/// Returns a value indicating whether an error suggests that the received response does not
+	/// belong to the request, so that the connection may be out of sync.
+	/// </summary>
+	/// <param name="code">The error code to check.</param>
+	/// <returns>true for errors to retry and finally close the connection; otherwise,
+	///   false.</returns>
+	private static bool IsOutOfSyncError(ModbusError code) => code is
+		ModbusError.CrcMismatch or
+		ModbusError.AddressMismatch or
+		ModbusError.IncompleteResponse or
+		ModbusError.TransactionIdMismatch or
+		ModbusError.DeviceIdMismatch or
+		ModbusError.FunctionCodeMismatch;
 
 	/// <summary>
 	/// Checks that a response is from the requested device and for the requested function.

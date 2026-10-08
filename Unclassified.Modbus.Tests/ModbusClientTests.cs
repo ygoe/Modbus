@@ -399,6 +399,27 @@ public class ModbusClientTests
 	}
 
 	/// <summary>
+	/// Checks that each register is written individually if a device does not respond to the
+	/// multiple write function.
+	/// </summary>
+	[TestMethod]
+	public async Task Write_MultipleTimesOut_WritesEachRegister()
+	{
+		var connection = new FakeConnection(request =>
+			request[1] == 16 ? throw new TimeoutException() : request);
+		using var client = CreateClient(connection, retryCount: 1);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0x1111);
+		objects.SetUInt16(0x11, 0x2222);
+
+		await client.Write(1, objects, TestContext.CancellationToken);
+
+		byte[] functionCodes = [.. connection.Requests.Select(r => r[1])];
+		CollectionAssert.AreEqual(new byte[] { 16, 6, 6 }, functionCodes);
+		Assert.IsTrue(client.AlwaysWriteSingle);
+	}
+
+	/// <summary>
 	/// Checks that a range longer than the protocol limit is written with multiple requests.
 	/// </summary>
 	[TestMethod]
@@ -543,6 +564,46 @@ public class ModbusClientTests
 		Assert.AreEqual("ABC", values[ModbusDeviceIdentificationObject.VendorName]);
 		Assert.AreEqual("P1", values[ModbusDeviceIdentificationObject.ProductCode]);
 		Assert.AreEqual("1.0", values[ModbusDeviceIdentificationObject.MajorMinorRevision]);
+	}
+
+	/// <summary>
+	/// Checks that the regular category is read from its first object if a device rejects
+	/// starting at object 0.
+	/// </summary>
+	[TestMethod]
+	public async Task ReadDeviceIdentification_RegularRejectedAtZero_StartsAtFirstObject()
+	{
+		byte[] basicResponse =
+		[
+			1, 43, 14, 1,
+			0x02,   // Conformity level: regular identification, stream access only
+			0x00,   // More follows: no
+			0x00,   // Next object ID
+			1,   // Number of objects
+			0x00, 1, (byte)'V'
+		];
+		byte[] regularResponse =
+		[
+			1, 43, 14, 2, 0x02, 0x00, 0x00,
+			1,   // Number of objects
+			0x03, 3, (byte)'u', (byte)'r', (byte)'l'
+		];
+		var connection = new FakeConnection(request => (request[3], request[4]) switch
+		{
+			(1, _) => basicResponse,
+			(2, 0) => [1, 0xab, (byte)ModbusError.IllegalDataAddress],
+			_ => regularResponse
+		});
+		using var client = CreateClient(connection);
+
+		var values = await client.ReadDeviceIdentification(1, TestContext.CancellationToken);
+
+		byte[] expectedLastRequest =
+			[1, 43, 14, 2, (byte)ModbusDeviceIdentificationObject.VendorUrl];
+		Assert.HasCount(3, connection.Requests);
+		CollectionAssert.AreEqual(expectedLastRequest, connection.Requests[2]);
+		Assert.AreEqual("V", values[ModbusDeviceIdentificationObject.VendorName]);
+		Assert.AreEqual("url", values[ModbusDeviceIdentificationObject.VendorUrl]);
 	}
 
 	#endregion Read device identification
@@ -724,6 +785,104 @@ public class ModbusClientTests
 		Assert.AreEqual(10, objects.Count);
 		Assert.IsTrue(objects.GetState(9));
 		AssertIgnoredDataLogged(logger, 1);
+	}
+
+	/// <summary>
+	/// Checks that a write confirmation for another address is retried and finally closes the
+	/// connection to get back in sync.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherAddressConfirmed_RetriesAndCloses()
+	{
+		var connection = new FakeConnection(_ => [1, 6, 0x00, 0x11, 0xbe, 0xef]);
+		using var client = CreateClient(connection, retryCount: 1);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0xbeef);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Write(1, objects, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.AddressMismatch, ex.Code);
+		Assert.HasCount(2, connection.Requests);
+		Assert.IsFalse(connection.IsOpen);
+	}
+
+	/// <summary>
+	/// Checks that a write is repeated after a confirmation for another address.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_OtherAddressConfirmed_Retries()
+	{
+		int requestCount = 0;
+		var connection = new FakeConnection(request =>
+			++requestCount == 1 ? [1, 6, 0x00, 0x11, 0xbe, 0xef] : request);
+		using var client = CreateClient(connection, retryCount: 1);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0xbeef);
+
+		await client.Write(1, objects, TestContext.CancellationToken);
+
+		Assert.HasCount(2, connection.Requests);
+	}
+
+	/// <summary>
+	/// Checks that an incomplete response is retried and finally closes the connection.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_Incomplete_RetriesAndCloses()
+	{
+		var connection = new FakeConnection(_ => [1, 3, 4, 0x00]);
+		using var client = CreateClient(connection, retryCount: 1);
+		var range = new ModbusRange(0, 1);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Read(
+				ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.IncompleteResponse, ex.Code);
+		Assert.HasCount(2, connection.Requests);
+		Assert.IsFalse(connection.IsOpen);
+	}
+
+	/// <summary>
+	/// Checks that a different confirmed value is not retried and keeps the connection, as the
+	/// response belongs to the request.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_DifferentValueConfirmed_NotRetried()
+	{
+		var connection = new FakeConnection(_ => [1, 6, 0x00, 0x10, 0x00, 0x00]);
+		using var client = CreateClient(connection, retryCount: 3);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0xbeef);
+
+		var ex = await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Write(1, objects, TestContext.CancellationToken));
+
+		Assert.AreEqual(ModbusError.WriteMismatch, ex.Code);
+		Assert.HasCount(1, connection.Requests);
+		Assert.IsTrue(connection.IsOpen);
+	}
+
+	/// <summary>
+	/// Checks that the response event is raised for an exception response and contains its
+	/// error code.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_Exception_RaisesEvent()
+	{
+		var connection = new FakeConnection(_ => [1, 0x83, (byte)ModbusError.IllegalDataAddress]);
+		using var client = CreateClient(connection);
+		var responseArgs = new List<ModbusClient.ResponseEventArgs>();
+		client.ResponseReceived += (sender, args) => responseArgs.Add(args);
+		var range = new ModbusRange(0);
+
+		await Assert.ThrowsExactlyAsync<ModbusException>(
+			() => client.Read(
+				ModbusObjectType.HoldingRegister, 1, range, TestContext.CancellationToken));
+
+		Assert.HasCount(1, responseArgs);
+		Assert.AreEqual(nameof(ModbusError.IllegalDataAddress), responseArgs[0].ErrorCode);
 	}
 
 	#endregion Response checks
