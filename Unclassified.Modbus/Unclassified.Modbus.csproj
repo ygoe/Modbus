@@ -17,7 +17,7 @@
     <Description>Modbus protocol implementation for .NET</Description>
     <Copyright>Yves Goergen</Copyright>
     <PackageTags>modbus protocol</PackageTags>
-    <PackageReadmeFile>readme.md</PackageReadmeFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/ygoe/Modbus</RepositoryUrl>
   </PropertyGroup>
 
@@ -29,7 +29,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="readme.md" Pack="true" PackagePath="/" />
+    <None Include="..\README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>
