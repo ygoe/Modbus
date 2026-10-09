@@ -9,7 +9,7 @@ namespace Unclassified.Modbus;
 public class ModbusSerialConnectionFactory : IModbusConnectionFactory
 {
 	/// <summary>
-	/// Initializes a new instance of the <see cref="ModbusTcpConnectionFactory"/> class.
+	/// Initializes a new instance of the <see cref="ModbusSerialConnectionFactory"/> class.
 	/// </summary>
 	/// <param name="portName">The name of the serial port to open.</param>
 	public ModbusSerialConnectionFactory(string portName)
@@ -18,7 +18,7 @@ public class ModbusSerialConnectionFactory : IModbusConnectionFactory
 	}
 
 	/// <summary>
-	/// Initializes a new instance of the <see cref="ModbusTcpConnectionFactory"/> class.
+	/// Initializes a new instance of the <see cref="ModbusSerialConnectionFactory"/> class.
 	/// </summary>
 	/// <param name="portName">The name of the serial port to open.</param>
 	/// <param name="baudRate">The serial communication baud rate.</param>
@@ -29,7 +29,7 @@ public class ModbusSerialConnectionFactory : IModbusConnectionFactory
 	}
 
 	/// <summary>
-	/// Initializes a new instance of the <see cref="ModbusTcpConnectionFactory"/> class.
+	/// Initializes a new instance of the <see cref="ModbusSerialConnectionFactory"/> class.
 	/// </summary>
 	/// <param name="portName">The name of the serial port to open.</param>
 	/// <param name="baudRate">The serial communication baud rate.</param>
@@ -42,7 +42,7 @@ public class ModbusSerialConnectionFactory : IModbusConnectionFactory
 	}
 
 	/// <summary>
-	/// Initializes a new instance of the <see cref="ModbusTcpConnectionFactory"/> class.
+	/// Initializes a new instance of the <see cref="ModbusSerialConnectionFactory"/> class.
 	/// </summary>
 	/// <param name="portName">The name of the serial port to open.</param>
 	/// <param name="baudRate">The serial communication baud rate.</param>

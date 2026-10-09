@@ -239,7 +239,7 @@ public class Program
 	/// </item>
 	/// <item>
 	/// -serial serialport[@baudrate[parity[stopbits]]]<br/>
-	/// baudrate: default is 9600<br/>
+	/// baudrate: default is 19200<br/>
 	/// parity: none|even|odd|mark|space (case-insensitive, can be abbreviated to first character), default is even<br/>
 	/// stopbits: 0|1|1.5|2, default depends on parity (1 or 2)
 	/// </item>
