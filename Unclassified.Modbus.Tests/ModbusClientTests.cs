@@ -296,6 +296,47 @@ public class ModbusClientTests
 			responseArgs.DataArray);
 	}
 
+	/// <summary>
+	/// Checks that a read that is started while another one waits for its response does not change
+	/// the event data of the other read.
+	/// </summary>
+	[TestMethod]
+	public async Task Read_Overlapping_RaisesEventsWithOwnData()
+	{
+		var connection = new FakeConnection(request => MakeRegisterReadResponse(request));
+		using var client = CreateClient(connection);
+		var requestArgs = new List<ModbusClient.RequestEventArgs>();
+		var responseArgs = new List<ModbusClient.ResponseEventArgs>();
+		Task<ModbusCollection>? otherRead = null;
+		client.SendingRequest += (sender, args) =>
+		{
+			requestArgs.Add(args);
+			// Start the other read while the first one holds the connection
+			otherRead ??= client.Read(
+				ModbusObjectType.HoldingRegister,
+				2,
+				new ModbusRange(10),
+				TestContext.CancellationToken);
+		};
+		client.ResponseReceived += (sender, args) => responseArgs.Add(args);
+
+		await client.Read(
+			ModbusObjectType.HoldingRegister, 1, new ModbusRange(0, 1), TestContext.CancellationToken);
+		Assert.IsNotNull(otherRead);
+		await otherRead;
+
+		Assert.HasCount(2, requestArgs);
+		Assert.AreEqual((byte)1, requestArgs[0].DeviceId);
+		Assert.AreEqual((ushort)0, requestArgs[0].StartAddress);
+		Assert.AreEqual((byte)2, requestArgs[1].DeviceId);
+		Assert.AreEqual((ushort)10, requestArgs[1].StartAddress);
+		Assert.HasCount(2, responseArgs);
+		Assert.AreEqual((byte)1, responseArgs[0].DeviceId);
+		CollectionAssert.AreEqual(new ushort[] { 0, 1 }, responseArgs[0].DataArray);
+		Assert.AreEqual((byte)2, responseArgs[1].DeviceId);
+		CollectionAssert.AreEqual(new ushort[] { 10 }, responseArgs[1].DataArray);
+	}
+
 	#endregion Read
 
 	#region Write
@@ -883,6 +924,31 @@ public class ModbusClientTests
 
 		Assert.HasCount(1, responseArgs);
 		Assert.AreEqual(nameof(ModbusError.IllegalDataAddress), responseArgs[0].ErrorCode);
+	}
+
+	/// <summary>
+	/// Checks that the response event of a retried request only contains the data of its own
+	/// response.
+	/// </summary>
+	[TestMethod]
+	public async Task Response_Retried_RaisesEventsWithOwnData()
+	{
+		int requestCount = 0;
+		var connection = new FakeConnection(request =>
+			++requestCount == 1 ? [1, 6, 0x00, 0x11] : request);
+		using var client = CreateClient(connection, retryCount: 1);
+		var responseArgs = new List<ModbusClient.ResponseEventArgs>();
+		client.ResponseReceived += (sender, args) => responseArgs.Add(args);
+		var objects = new ModbusCollection(ModbusObjectType.HoldingRegister);
+		objects.SetUInt16(0x10, 0xbeef);
+
+		await client.Write(1, objects, TestContext.CancellationToken);
+
+		Assert.HasCount(2, responseArgs);
+		Assert.IsNull(responseArgs[0].StartAddress);
+		Assert.IsNull(responseArgs[0].Data);
+		Assert.AreEqual((ushort)0x10, responseArgs[1].StartAddress);
+		Assert.AreEqual((ushort)0xbeef, responseArgs[1].Data);
 	}
 
 	#endregion Response checks
