@@ -1,17 +1,16 @@
 @echo off
-set TargetFramework=net9.0
 
 :: ----- Build ModbusClientDemo -----
 
 :: Initialise
 pushd "%~dp0"
-cd ModbusClientDemo
 
 :: Clean
-if exist bin\Release\%TargetFramework% rd /s /q bin\Release\%TargetFramework% || goto error
-dotnet clean -v m -c Release -nologo || goto error
+if exist artifacts rd /s /q artifacts || goto error
+dotnet clean -nologo --tl -v m -c Release || goto error
 
 :: Build
+pushd ModbusClientDemo
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for win-x64...
 dotnet publish -c Release -r win-x64 --self-contained -nologo || goto error
 
@@ -20,6 +19,7 @@ dotnet publish -c Release -r linux-arm --self-contained -nologo || goto error
 
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for linux-arm64...
 dotnet publish -c Release -r linux-arm64 --self-contained -nologo || goto error
+popd
 
 :: ----- Finish -----
 
