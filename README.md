@@ -122,6 +122,7 @@ Many devices deviate from the Modbus specification. The client handles these cas
 - Responses with more data than requested: the extra data is ignored.
 - Devices that only support either the single or the multiple write function codes: the client detects this on the first write and keeps using the supported functions (see `AlwaysWriteSingle` and `AlwaysWriteMultiple`).
 - Responses with a different device ID or Modbus TCP transaction ID: these can be accepted with `IgnoreDeviceIdMismatch` and the `ignoreTransactionIdMismatch` parameter of `ModbusTcpConnectionFactory`.
+- Late Modbus TCP responses to earlier requests that have timed out: responses received before a request is sent, and responses with another transaction ID, are discarded while waiting for the matching response. Transaction IDs continue across connections, so that a late response on a new connection is detected as well.
 - Read device identification: devices that require a specific start object per category, or that send the exception code at a different position.
 
 ## Not supported

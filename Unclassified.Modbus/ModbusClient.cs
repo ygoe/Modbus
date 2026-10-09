@@ -1146,7 +1146,8 @@ public class ModbusClient : IDisposable
 		ModbusError.IncompleteResponse or
 		ModbusError.TransactionIdMismatch or
 		ModbusError.DeviceIdMismatch or
-		ModbusError.FunctionCodeMismatch;
+		ModbusError.FunctionCodeMismatch or
+		ModbusError.InvalidFrameHeader;
 
 	/// <summary>
 	/// Checks that a response is from the requested device and for the requested function.

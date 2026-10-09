@@ -310,7 +310,7 @@ public class ModbusTcpTests
 	/// <summary>
 	/// Creates a Modbus TCP message frame with the specified transaction ID and body.
 	/// </summary>
-	private static byte[] MakeFrame(ushort transactionId, byte[] body) =>
+	internal static byte[] MakeFrame(ushort transactionId, byte[] body) =>
 	[
 		(byte)(transactionId >> 8),
 		(byte)(transactionId & 0xff),
@@ -324,7 +324,7 @@ public class ModbusTcpTests
 	/// <summary>
 	/// Reads the specified number of bytes from the stream.
 	/// </summary>
-	private static async Task<byte[]> ReadExactly(NetworkStream stream, int count)
+	internal static async Task<byte[]> ReadExactly(NetworkStream stream, int count)
 	{
 		using var cts = new CancellationTokenSource(networkTimeout);
 		byte[] buffer = new byte[count];
@@ -335,7 +335,7 @@ public class ModbusTcpTests
 	/// <summary>
 	/// Checks that the remote side closes the connection without sending more data.
 	/// </summary>
-	private static async Task AssertClosed(NetworkStream stream)
+	internal static async Task AssertClosed(NetworkStream stream)
 	{
 		using var cts = new CancellationTokenSource(networkTimeout);
 		int length;

@@ -35,6 +35,11 @@ public class ModbusTcpConnectionFactory : IModbusConnectionFactory
 	/// <summary>
 	/// Gets a value indicating whether non-matching response transaction IDs are ignored.
 	/// </summary>
+	/// <remarks>
+	/// If false, responses with another transaction ID, like late responses to earlier requests,
+	/// are discarded while waiting for the matching response. Responses that were received before
+	/// a request was sent are always discarded.
+	/// </remarks>
 	public bool IgnoreTransactionIdMismatch { get; }
 
 	/// <inheritdoc/>

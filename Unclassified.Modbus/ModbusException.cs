@@ -77,6 +77,7 @@ public class ModbusException : Exception
 		ModbusError.TransactionIdMismatch => "The received response has a different transaction ID than the request.",
 		ModbusError.DeviceIdMismatch => "The received response is from a different device ID than requested.",
 		ModbusError.FunctionCodeMismatch => "The received response is for a different function code than requested.",
+		ModbusError.InvalidFrameHeader => "The received response has an invalid frame header.",
 
 		_ => $"An unknown Modbus exception occurred (code {(int)code}, 0x{(int)code:x2})."
 	};
@@ -194,6 +195,12 @@ public enum ModbusError
 	/// probably about something else than what the request asked for.
 	/// </summary>
 	FunctionCodeMismatch = 263,
+
+	/// <summary>
+	/// The TCP response frame header has a protocol ID other than 0 or an invalid length. The
+	/// received data cannot be split into frames anymore, so the connection is closed.
+	/// </summary>
+	InvalidFrameHeader = 264,
 
 	#endregion Internal client errors (above 255)
 }
