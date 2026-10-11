@@ -15,6 +15,10 @@ dotnet test Unclassified.Modbus.Tests
 
 The build also creates the NuGet package; the version is derived from git by `Unclassified.NetRevisionTask`. The build is currently free of warnings; keep it that way.
 
+`build-package.cmd` makes a clean release build of the library, which puts the package in `artifacts\package\release`.
+
+The library and the tests target `net9.0` and `net10.0`, the demo apps only `net10.0`. Library code must compile and behave the same on both runtimes, and `dotnet test` runs every test once per framework.
+
 The tests use MSTest and reach the library's internal classes through `InternalsVisibleTo`.
 
 ## Architectural big picture
@@ -33,7 +37,7 @@ The solution contains the library `Unclassified.Modbus`, its tests in `Unclassif
 
 - Tabs for indentation in C# (match existing files).
 - File-scoped namespaces.
-- `Nullable` and `ImplicitUsings` are enabled in every project file (there is no `Directory.Build.props`); set them in new projects as well.
+- `Nullable` and `ImplicitUsings` are enabled in every project file; set them in new projects as well.
 - Use XML doc comments with a `<summary>` element for the most important part and an optional `<remarks>` for details or the why. `<param>` and `<returns>` may be omitted if obvious from the names; but must be complete if used. An `async Task` method without a true return value needs no `<returns>`. See comment policy. Also use XML doc for private members.
 - Braces for single-line bodies of conditions are optional. If any branch in an `if` statement needs or has braces around the body, add them to all other branches as well. Always add braces around the body of other types (loops, locks etc.).
 - Use the explicit language type keyword instead of `var` for simple types.

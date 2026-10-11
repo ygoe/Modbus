@@ -23,7 +23,7 @@ A Modbus library for .NET. It provides a client for Modbus TCP and Modbus RTU ov
 dotnet add package Unclassified.Modbus
 ```
 
-The library targets .NET 9.
+The library targets .NET 9 and .NET 10.
 
 ## Quick start
 

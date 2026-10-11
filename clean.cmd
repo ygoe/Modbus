@@ -9,7 +9,7 @@ if exist .vs rd /s /q .vs || goto error
 
 echo Deleting build directories...
 if exist artifacts rd /s /q artifacts || goto error
-dotnet clean -nologo --tl -v m -c Release || goto error
+dotnet clean -nologo --tl -v m -c release || goto error
 echo Done.
 
 :: Exit

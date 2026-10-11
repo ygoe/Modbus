@@ -7,18 +7,18 @@ pushd "%~dp0"
 
 :: Clean
 if exist artifacts rd /s /q artifacts || goto error
-dotnet clean -nologo --tl -v m -c Release || goto error
+dotnet clean -nologo --tl -v m -c release || goto error
 
 :: Build
 pushd ModbusClientDemo
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for win-x64...
-dotnet publish -c Release -r win-x64 --self-contained -nologo || goto error
+dotnet publish -c release -r win-x64 --self-contained -nologo || goto error
 
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for linux-arm...
-dotnet publish -c Release -r linux-arm --self-contained -nologo || goto error
+dotnet publish -c release -r linux-arm --self-contained -nologo || goto error
 
 powershell write-host -fore Blue Building and publishing ModbusClientDemo for linux-arm64...
-dotnet publish -c Release -r linux-arm64 --self-contained -nologo || goto error
+dotnet publish -c release -r linux-arm64 --self-contained -nologo || goto error
 popd
 
 :: ----- Finish -----
